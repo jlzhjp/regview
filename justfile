@@ -32,6 +32,14 @@ frontend-fmt: frontend-deps
 run *args: build
     exec ./bin/regview --config regview.example.yaml "$@"
 
+# Prepare one or both supported Fedora e2e images (defaults to both).
+e2e-prepare *args:
+    fish e2e/prepare.fish {{ args }}
+
+# Boot a prepared Fedora VM with live-mounted scripts and binary.
+e2e-vm variant:
+    fish e2e/run.fish {{ variant }}
+
 # Regenerate templ components and embedded third-party notices.
 generate: licenses
     "$GO" run {{ templ }} generate

@@ -1,0 +1,6 @@
+{
+  "features": {
+    "containerd-snapshotter": true
+  },
+  "insecure-registries": ["localhost:5000"]
+}

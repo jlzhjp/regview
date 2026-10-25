@@ -141,8 +141,8 @@ func (h *Handler) tags(w http.ResponseWriter, r *http.Request, repo string) {
 func paginate(w http.ResponseWriter, r *http.Request, values []string) ([]string, error) {
 	query := r.URL.Query()
 	if last := query.Get("last"); last != "" {
-		i, _ := slices.BinarySearch(values, last)
-		if i < len(values) && values[i] == last {
+		i, found := slices.BinarySearch(values, last)
+		if found {
 			i++
 		}
 		values = values[i:]

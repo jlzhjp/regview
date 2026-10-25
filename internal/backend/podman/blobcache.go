@@ -84,5 +84,5 @@ func (s *request) readLayer(ctx context.Context, l layer) (image.Blob, error) {
 	}
 	// Cancellation releases this request's lease, never the shared file owner.
 	stop := closeOnCancel(ctx, blob.Closer)
-	return image.Blob{ReaderAt: blob.ReaderAt, Size: blob.Size, Closer: &readCloser{close: func() error { stop(); return blob.Close() }}}, nil
+	return image.Blob{ReaderAt: blob.ReaderAt, Size: blob.Size, Closer: closeFunc(func() error { stop(); return blob.Close() })}, nil
 }

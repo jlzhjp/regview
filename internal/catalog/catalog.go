@@ -112,21 +112,20 @@ func (c *Catalog) inventory(ctx context.Context, host, repo string) ([]*entry, [
 		statuses = append(statuses, status)
 	}
 	slices.SortFunc(entries, compareEntries)
-	winners := make(map[string]*entry)
+	winners := make(map[Name]*entry)
 	for _, e := range entries {
 		if e.name.Tag == "" {
 			continue
 		}
-		key := tagKey(e.name)
-		winner := winners[key]
+		winner := winners[e.name]
 		if winner == nil {
 			e.selected = true
-			winners[key] = e
+			winners[e.name] = e
 			continue
 		}
 		if winner.record.Target.Digest != e.record.Target.Digest {
 			winner.conflict, e.conflict = true, true
-			c.logger.WarnContext(ctx, "conflicting image tag; serving Docker image", "image", key, "selected_backend", winner.backend.Name(), "selected_digest", winner.record.Target.Digest, "other_backend", e.backend.Name(), "other_digest", e.record.Target.Digest)
+			c.logger.WarnContext(ctx, "conflicting image tag; serving Docker image", "image", tagKey(e.name), "selected_backend", winner.backend.Name(), "selected_digest", winner.record.Target.Digest, "other_backend", e.backend.Name(), "other_digest", e.record.Target.Digest)
 		}
 	}
 	return entries, statuses, errors.Join(failures...)
@@ -149,9 +148,23 @@ func compareEntries(a, b *entry) int {
 }
 func tagKey(n Name) string { return n.Host + "/" + n.Repository + ":" + n.Tag }
 
-// recordKey only deduplicates aliases within the current request.
-func recordKey(e *entry) string {
-	return e.backend.Name() + ":" + e.record.ID + ":" + e.record.Target.Digest.String()
+// uniqueRecords collapses tag aliases for content lookup, preserving backend
+// priority. Identity includes the pinned target, so retagged records stay distinct.
+func uniqueRecords(entries []*entry) []*entry {
+	type identity struct {
+		backend, id string
+		digest      digest.Digest
+	}
+	seen := make(map[identity]bool, len(entries))
+	var records []*entry
+	for _, e := range entries {
+		key := identity{e.backend.Name(), e.record.ID, e.record.Target.Digest}
+		if !seen[key] {
+			seen[key] = true
+			records = append(records, e)
+		}
+	}
+	return records
 }
 
 func (c *Catalog) Repositories(ctx context.Context, host string) ([]string, error) {
@@ -217,17 +230,11 @@ func (c *Catalog) Manifest(ctx context.Context, host, repo, ref string) (image.M
 		return image.Manifest{}, image.ErrNotFound
 	}
 	d, err := digest.Parse(ref)
-	if err != nil || !d.Algorithm().Available() {
+	if err != nil {
 		return image.Manifest{}, image.ErrNotFound
 	}
 	var failures []error
-	seen := make(map[string]bool)
-	for _, e := range entries {
-		key := recordKey(e)
-		if seen[key] {
-			continue
-		}
-		seen[key] = true
+	for _, e := range uniqueRecords(entries) {
 		a, err := e.backend.Prepare(ctx, e.record)
 		if err != nil {
 			failures = append(failures, err)
@@ -255,21 +262,12 @@ func (c *Catalog) Blob(ctx context.Context, host, repo string, d digest.Digest) 
 	if err := d.Validate(); err != nil {
 		return nil, image.ErrNotFound
 	}
-	if !d.Algorithm().Available() {
-		return nil, image.ErrNotFound
-	}
 	entries, _, err := c.inventory(ctx, host, repo)
 	if err != nil {
 		return nil, err
 	}
 	var failures []error
-	seen := make(map[string]bool)
-	for _, e := range entries {
-		key := recordKey(e)
-		if seen[key] {
-			continue
-		}
-		seen[key] = true
+	for _, e := range uniqueRecords(entries) {
 		resolved, err := e.backend.ResolveBlob(ctx, e.record, d)
 		if errors.Is(err, image.ErrNotFound) {
 			continue

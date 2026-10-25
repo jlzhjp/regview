@@ -43,3 +43,25 @@ func TestViewerAndHTMXPartials(t *testing.T) {
 		}
 	}
 }
+
+func TestManifestFormattingPreservesNumbers(t *testing.T) {
+	backend := testutil.NewBackend("docker")
+	manifest, _ := backend.Add("example.test/app:v1", "layer")
+	// OCI permits extension fields. Formatting must not round a large integer
+	// or normalize its numeric spelling when displaying the original manifest.
+	data := strings.TrimSuffix(string(backend.Content[manifest.Digest]), "}") + `,"extension":{"integer":9007199254740993,"decimal":1.2300,"exponent":1e1000}}`
+	target := backend.Put([]byte(data), manifest.MediaType)
+	backend.Retag("example.test/app:v1", image.Record{ID: target.Digest.String(), Target: target})
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	handler := New(catalog.New([]image.Backend{backend}, []string{"example.test"}, logger), logger)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequestWithContext(t.Context(), "GET", "/manifest?host=example.test&repository=app&reference=v1", nil))
+	if response.Code != 200 {
+		t.Fatalf("manifest response: %d %s", response.Code, response.Body)
+	}
+	for _, number := range []string{"9007199254740993", "1.2300", "1e1000"} {
+		if !strings.Contains(response.Body.String(), number) {
+			t.Errorf("manifest display changed %s: %s", number, response.Body)
+		}
+	}
+}

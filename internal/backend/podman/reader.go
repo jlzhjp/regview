@@ -35,7 +35,10 @@ func exportLayer(ctx context.Context, l layer) (image.Blob, error) {
 		defer func() { _ = gz.Close() }()
 		// Cancellation can safely close the underlying file while Read is in
 		// progress; gzip.Reader.Close itself must not race with gzip.Reader.Read.
-		r = &readCloser{Reader: gz, close: original.Close}
+		r = struct {
+			io.Reader
+			io.Closer
+		}{gz, original}
 	}
 	return verifyReader(ctx, r, l.descriptor.Digest, l.descriptor.Size)
 }
@@ -53,9 +56,6 @@ func verifyReader(ctx context.Context, r io.ReadCloser, expected digest.Digest, 
 	}()
 	if err = expected.Validate(); err != nil {
 		return result, err
-	}
-	if !expected.Algorithm().Available() {
-		return result, fmt.Errorf("unsupported digest algorithm %s", expected.Algorithm())
 	}
 	var readerAt io.ReaderAt
 	var file *os.File
@@ -143,9 +143,6 @@ type onceCloser struct {
 
 func (c *onceCloser) Close() error { c.once.Do(func() { c.err = c.closer.Close() }); return c.err }
 
-type readCloser struct {
-	io.Reader
-	close func() error
-}
+type closeFunc func() error
 
-func (r *readCloser) Close() error { return r.close() }
+func (f closeFunc) Close() error { return f() }

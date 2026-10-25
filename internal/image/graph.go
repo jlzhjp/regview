@@ -74,9 +74,6 @@ func Verify(desc oci.Descriptor, data []byte) error {
 	if err := desc.Digest.Validate(); err != nil {
 		return err
 	}
-	if !desc.Digest.Algorithm().Available() {
-		return fmt.Errorf("unsupported digest algorithm %s", desc.Digest.Algorithm())
-	}
 	if int64(len(data)) != desc.Size || desc.Digest.Algorithm().FromBytes(data) != desc.Digest {
 		return fmt.Errorf("content does not match descriptor %s", desc.Digest)
 	}

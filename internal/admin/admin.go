@@ -2,6 +2,7 @@
 package admin
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -50,18 +51,14 @@ func New(c *catalog.Catalog, logger *slog.Logger) http.Handler {
 			http.Error(w, "Manifest is unavailable", status)
 			return
 		}
-		var value any
-		if err := json.Unmarshal(manifest.Data, &value); err != nil {
-			http.Error(w, "Invalid manifest", 500)
-			return
-		}
-		pretty, err := json.MarshalIndent(value, "", "  ")
-		if err != nil {
-			http.Error(w, "Invalid manifest", 500)
+		// Format the original JSON without converting numbers through float64.
+		var pretty bytes.Buffer
+		if err := json.Indent(&pretty, manifest.Data, "", "  "); err != nil {
+			http.Error(w, "Invalid manifest", http.StatusInternalServerError)
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		if err := manifestDetails(manifest.Descriptor.Digest.String(), string(pretty)).Render(r.Context(), w); err != nil {
+		if err := manifestDetails(manifest.Descriptor.Digest.String(), pretty.String()).Render(r.Context(), w); err != nil {
 			logger.Error("render manifest", "error", err)
 		}
 	})

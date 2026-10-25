@@ -108,8 +108,8 @@ func Load(flags *pflag.FlagSet, file string, uid int) (Config, error) {
 	_, envBackends := os.LookupEnv("REGVIEW_BACKENDS")
 	if !flags.Changed("backends") && !v.InConfig("backends") && !envBackends {
 		config.Backends = nil
-	} else if len(config.Backends) == 0 {
-		return Config{}, fmt.Errorf("explicit backends must not be empty")
+	} else if config.Backends == nil {
+		config.Backends = []string{}
 	}
 	return config, config.Validate()
 }

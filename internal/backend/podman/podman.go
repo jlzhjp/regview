@@ -200,36 +200,7 @@ func (s *request) prepare(ctx context.Context, id string, expected oci.Descripto
 	s.sources = append(s.sources, source)
 	var root oci.Descriptor
 	if image.IsIndex(mediaType) {
-		var index oci.Index
-		if err := json.Unmarshal(data, &index); err != nil {
-			return oci.Descriptor{}, err
-		}
-		children := make([]oci.Descriptor, 0, len(index.Manifests))
-		for _, child := range index.Manifests {
-			id, err := s.instanceID(ctx, child.Digest)
-			if errors.Is(err, image.ErrNotFound) {
-				a.Missing = append(a.Missing, child.Digest)
-				continue
-			}
-			if err != nil {
-				return oci.Descriptor{}, err
-			}
-			converted, err := s.prepare(ctx, id, child, a, depth+1)
-			if err != nil {
-				return oci.Descriptor{}, err
-			}
-			converted.Platform, converted.Annotations = child.Platform, child.Annotations
-			children = append(children, converted)
-		}
-		if len(children) == 0 {
-			return oci.Descriptor{}, fmt.Errorf("no local instances of Podman index %s: %w", expected.Digest, image.ErrNotFound)
-		}
-		index.MediaType, index.Manifests, index.Subject = oci.MediaTypeImageIndex, children, nil
-		if s.wantedBlob == "" {
-			root, err = addManifest(a, index, oci.MediaTypeImageIndex)
-		} else {
-			root = expected
-		}
+		root, err = s.prepareIndex(ctx, data, expected, a, depth)
 	} else {
 		open := s.openImage
 		reopen := func(ctx context.Context) (types.ImageSource, error) {
@@ -250,6 +221,38 @@ func (s *request) prepare(ctx context.Context, id string, expected oci.Descripto
 	}
 	s.prepared[key] = root
 	return root, nil
+}
+
+func (s *request) prepareIndex(ctx context.Context, data []byte, expected oci.Descriptor, a *image.Artifact, depth int) (oci.Descriptor, error) {
+	var index oci.Index
+	if err := json.Unmarshal(data, &index); err != nil {
+		return oci.Descriptor{}, err
+	}
+	children := make([]oci.Descriptor, 0, len(index.Manifests))
+	for _, child := range index.Manifests {
+		id, err := s.instanceID(ctx, child.Digest)
+		if errors.Is(err, image.ErrNotFound) {
+			a.Missing = append(a.Missing, child.Digest)
+			continue
+		}
+		if err != nil {
+			return oci.Descriptor{}, err
+		}
+		converted, err := s.prepare(ctx, id, child, a, depth+1)
+		if err != nil {
+			return oci.Descriptor{}, err
+		}
+		converted.Platform, converted.Annotations = child.Platform, child.Annotations
+		children = append(children, converted)
+	}
+	if len(children) == 0 {
+		return oci.Descriptor{}, fmt.Errorf("no local instances of Podman index %s: %w", expected.Digest, image.ErrNotFound)
+	}
+	index.MediaType, index.Manifests, index.Subject = oci.MediaTypeImageIndex, children, nil
+	if s.wantedBlob != "" {
+		return expected, nil
+	}
+	return addManifest(a, index, oci.MediaTypeImageIndex)
 }
 
 func (s *request) prepareImage(ctx context.Context, source types.ImageSource, data []byte, mediaType string, instance *digest.Digest, reopen func(context.Context) (types.ImageSource, error), a *image.Artifact) (oci.Descriptor, error) {

@@ -3,6 +3,7 @@ tags := "containers_image_openpgp,exclude_graphdriver_btrfs"
 templ := "github.com/a-h/templ/cmd/templ@v0.3.1070"
 golangci := "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0"
 go_licenses := "github.com/google/go-licenses/v2@v2.0.1"
+fish_sources := "e2e/*.fish e2e/functions/*.fish e2e/tests/*.fish e2e/mkosi/mkosi.extra/usr/local/bin/regview-e2e"
 
 # Build the registry binary (default).
 build: generate
@@ -27,6 +28,14 @@ ui-lint: ui-deps
 ui-fmt: ui-deps
     pnpm fmt
 
+# Format Fish scripts and the VM launcher.
+fish-fmt:
+    fish_indent --write {{ fish_sources }}
+
+# Check Fish script and VM launcher formatting.
+fish-lint:
+    fish_indent --check {{ fish_sources }}
+
 # Build and start with the example configuration; forward additional CLI flags.
 [positional-arguments]
 run *args: build
@@ -39,6 +48,14 @@ e2e-prepare *args:
 # Boot a prepared Fedora VM with live-mounted scripts and binary.
 e2e-vm variant:
     fish e2e/run.fish {{ variant }}
+
+# Check e2e script syntax and pull isolation/failure cleanup without a VM.
+e2e-test:
+    #!/usr/bin/env fish
+    for script in {{ fish_sources }}
+        fish --no-execute $script; or exit $status
+    end
+    fish e2e/tests/pull.fish
 
 # Regenerate templ components and embedded third-party notices.
 generate: licenses
@@ -54,8 +71,8 @@ licenses: ui
     GOFLAGS="${GOFLAGS:-} -tags={{ tags }}" "$GO" run {{ go_licenses }} save ./cmd/regview --ignore regview --save_path="$license_stage/go"
     tar -czf internal/assets/dist/licenses.tar.gz -C "$license_stage" go npm
 
-# Format UI, Go, and templ source files.
-fmt: ui-fmt
+# Format UI, Fish, Go, and templ source files.
+fmt: ui-fmt fish-fmt
     gofmt -w .
     "$GO" run {{ templ }} fmt .
 
@@ -67,7 +84,7 @@ test: generate
 vet: generate
     "$GO" vet -tags '{{ tags }}' ./...
 
-# Run the pinned linter and check Go formatting.
-lint: generate ui-lint
+# Check UI and Fish formatting and run the pinned Go linter.
+lint: generate ui-lint fish-lint
     "$GO" run {{ golangci }} config verify
     "$GO" run {{ golangci }} run ./...

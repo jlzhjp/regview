@@ -22,10 +22,10 @@ Use the justfile as the source of truth for commands and pinned development tool
 ```sh
 just build          # Generate assets/notices/templates and compile bin/regview
 just run --dry-run  # Build, then run with regview.example.yaml and extra flags
-just fmt            # Format UI, Go, and templ sources
+just fmt            # Format UI, Fish, Go, and templ sources
 just test           # Generate assets and run all Go tests with the race detector
 just vet
-just lint           # Generate assets; check UI and Go with pinned linters
+just lint           # Generate assets; check UI, Fish, and Go
 ```
 
 Go builds use `containers_image_openpgp,exclude_graphdriver_btrfs` to avoid
@@ -83,6 +83,9 @@ assets; it does not start a web server.
 classes. `just ui-fmt` formats authored UI files. The Tailwind checker
 uses an unstable canonicalization API, so keep Tailwind and its Node/Vite packages
 pinned together and review the checker when upgrading.
+
+`just fish-lint` checks Fish formatting; `just fish-fmt` formats the scripts and
+VM launcher.
 
 All browser assets are local. Preserve accessible controls, focus styles, the skip
 link, live announcements, and system/light/dark themes with optional saved storage.

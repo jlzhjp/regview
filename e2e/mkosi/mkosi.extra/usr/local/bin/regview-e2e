@@ -1,0 +1,3 @@
+#!/usr/bin/fish
+set -p fish_function_path /usr/local/share/regview-e2e
+regview_e2e $argv

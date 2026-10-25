@@ -15,7 +15,7 @@ type Finding = {
 };
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const entryPoint = path.join(root, 'frontend/src/app.css');
+const entryPoint = path.join(root, 'ui/src/app.css');
 const rootFontSize = 16;
 
 const design = await __unstable__loadDesignSystem(fs.readFileSync(entryPoint, 'utf8'), {
@@ -37,8 +37,8 @@ function walk(directory: string, extension: string, files: string[] = []): strin
 
 const sources = [
   ...walk(path.join(root, 'internal'), '.templ'),
-  ...walk(path.join(root, 'frontend/src'), '.ts'),
-  ...walk(path.join(root, 'frontend/src'), '.css'),
+  ...walk(path.join(root, 'ui/src'), '.ts'),
+  ...walk(path.join(root, 'ui/src'), '.css'),
 ];
 
 function location(source: string, offset: number): { line: number; column: number } {

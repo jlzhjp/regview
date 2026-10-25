@@ -9,22 +9,22 @@ build: generate
     "$GO" build -tags '{{ tags }}' -o bin/regview ./cmd/regview
 
 # Build the JS and CSS embedded in the Go binary.
-frontend: frontend-deps
+ui: ui-deps
     pnpm build
 
-# Install the locked frontend development tools and dependencies.
-frontend-deps:
+# Install the locked UI development tools and dependencies.
+ui-deps:
     pnpm install --frozen-lockfile
 
-# Check frontend lint, formatting, types, and canonical Tailwind classes.
-frontend-lint: frontend-deps
+# Check UI lint, formatting, types, and canonical Tailwind classes.
+ui-lint: ui-deps
     pnpm lint
     pnpm fmt:check
     pnpm typecheck
     pnpm tailwind-check
 
-# Format frontend sources, build scripts, and configuration.
-frontend-fmt: frontend-deps
+# Format UI sources, build scripts, and configuration.
+ui-fmt: ui-deps
     pnpm fmt
 
 # Build and start with the example configuration; forward additional CLI flags.
@@ -45,7 +45,7 @@ generate: licenses
     "$GO" run {{ templ }} generate
 
 # Collect Go and npm production licenses in one embedded archive.
-licenses: frontend
+licenses: ui
     #!/usr/bin/env bash
     set -euo pipefail
     license_stage=$(mktemp -d)
@@ -54,8 +54,8 @@ licenses: frontend
     GOFLAGS="${GOFLAGS:-} -tags={{ tags }}" "$GO" run {{ go_licenses }} save ./cmd/regview --ignore regview --save_path="$license_stage/go"
     tar -czf internal/assets/dist/licenses.tar.gz -C "$license_stage" go npm
 
-# Format frontend, Go, and templ source files.
-fmt: frontend-fmt
+# Format UI, Go, and templ source files.
+fmt: ui-fmt
     gofmt -w .
     "$GO" run {{ templ }} fmt .
 
@@ -68,6 +68,6 @@ vet: generate
     "$GO" vet -tags '{{ tags }}' ./...
 
 # Run the pinned linter and check Go formatting.
-lint: generate frontend-lint
+lint: generate ui-lint
     "$GO" run {{ golangci }} config verify
     "$GO" run {{ golangci }} run ./...

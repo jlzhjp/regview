@@ -19,16 +19,16 @@ func TestViewerAndHTMXPartials(t *testing.T) {
 	c := catalog.New([]image.Backend{b}, []string{"example.test"}, logger)
 	h := New(c, logger)
 	for _, tc := range []struct{ path, contains string }{
-		{"/", `<script type="module" src="/assets/frontend/app.js"`},
-		{"/", `<link rel="stylesheet" href="/assets/frontend/app.css"`},
+		{"/", `<script type="module" src="/assets/ui/app.js"`},
+		{"/", `<link rel="stylesheet" href="/assets/ui/app.css"`},
 		{"/", `<meta name="htmx-config" content='{"allowEval":false}'>`},
 		{"/images", "team/api"},
 		{"/images?q=nothing", "No images match"},
 		{"/manifest?host=example.test&repository=team/api&reference=v1", "Served digest"},
-		{"/assets/frontend/app.js", "htmx"},
-		{"/assets/frontend/app.css", "color-scheme"},
-		{"/assets/frontend/app.css", "url(/assets/frontend/IBM%20Plex%20Mono%20Var-Roman.woff2)"},
-		{"/assets/frontend/IBM%20Plex%20Mono%20Var-Roman.woff2", "wOF2"},
+		{"/assets/ui/app.js", "htmx"},
+		{"/assets/ui/app.css", "color-scheme"},
+		{"/assets/ui/app.css", "url(/assets/ui/IBM%20Plex%20Mono%20Var-Roman.woff2)"},
+		{"/assets/ui/IBM%20Plex%20Mono%20Var-Roman.woff2", "wOF2"},
 		{"/assets/licenses.tar.gz", "\x1f\x8b"},
 	} {
 		w := httptest.NewRecorder()

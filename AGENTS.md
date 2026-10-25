@@ -22,10 +22,10 @@ Use the justfile as the source of truth for commands and pinned development tool
 ```sh
 just build          # Generate assets/notices/templates and compile bin/regview
 just run --dry-run  # Build, then run with regview.example.yaml and extra flags
-just fmt            # Format frontend, Go, and templ sources
+just fmt            # Format UI, Go, and templ sources
 just test           # Generate assets and run all Go tests with the race detector
 just vet
-just lint           # Generate assets; check frontend and Go with pinned linters
+just lint           # Generate assets; check UI and Go with pinned linters
 ```
 
 Go builds use `containers_image_openpgp,exclude_graphdriver_btrfs` to avoid
@@ -70,17 +70,17 @@ Backend connections and verified immutable readers may be shared. Preparation
 must use the selected record's immutable ID and descriptor, never resolve its tag
 again. Do not fall back to another backend after a selected tag fails preparation.
 
-## Frontend and generated files
+## UI and generated files
 
-Edit `frontend/src/app.ts`, `frontend/src/app.css`, and
+Edit `ui/src/app.ts`, `ui/src/app.css`, and
 `internal/admin/views.templ`. Do not edit `views_templ.go` or
 `internal/assets/dist/` by hand. Vite emits embedded JS/CSS/fonts to
-`dist/frontend/`; `just generate` also regenerates templ components and notices.
+`dist/ui/`; `just generate` also regenerates templ components and notices.
 Rebuild/restart Go after changing embedded assets. `pnpm dev` watches and rebuilds
 assets; it does not start a web server.
 
-`just frontend-lint` checks Oxlint, Oxfmt, TypeScript, and canonical Tailwind
-classes. `just frontend-fmt` formats authored frontend files. The Tailwind checker
+`just ui-lint` checks Oxlint, Oxfmt, TypeScript, and canonical Tailwind
+classes. `just ui-fmt` formats authored UI files. The Tailwind checker
 uses an unstable canonicalization API, so keep Tailwind and its Node/Vite packages
 pinned together and review the checker when upgrading.
 
@@ -91,7 +91,7 @@ an EVAL bundler warning; do not patch eval semantics or suppress the warning.
 
 ## Dependency notices
 
-`just licenses` builds frontend assets and writes
+`just licenses` builds UI assets and writes
 `internal/assets/dist/licenses.tar.gz`. The npm collector reads installed
 production dependencies through pnpm and copies root license/copying/notice files
 with a path-free `npm/index.json`. The pinned go-licenses tool collects the Go

@@ -6,9 +6,9 @@
     "build": "pnpm typecheck && vite build",
     "typecheck": "tsc --noEmit",
     "dev": "vite build --watch",
-    "lint": "oxlint --deny-warnings frontend/src scripts vite.config.ts",
-    "fmt": "oxfmt frontend scripts vite.config.ts package.json tsconfig.json pnpm-workspace.yaml .oxlintrc.json .oxfmtrc.json",
-    "fmt:check": "oxfmt --check frontend scripts vite.config.ts package.json tsconfig.json pnpm-workspace.yaml .oxlintrc.json .oxfmtrc.json",
+    "lint": "oxlint --deny-warnings ui/src scripts vite.config.ts",
+    "fmt": "oxfmt ui scripts vite.config.ts package.json tsconfig.json pnpm-workspace.yaml .oxlintrc.json .oxfmtrc.json",
+    "fmt:check": "oxfmt --check ui scripts vite.config.ts package.json tsconfig.json pnpm-workspace.yaml .oxlintrc.json .oxfmtrc.json",
     "tailwind-check": "node scripts/tailwind-check.ts"
   },
   "dependencies": {

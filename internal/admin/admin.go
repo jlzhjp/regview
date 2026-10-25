@@ -1,4 +1,4 @@
-// Package admin serves an HTML viewer using templ and bundled frontend assets.
+// Package admin serves an HTML viewer using templ and bundled UI assets.
 package admin
 
 import (

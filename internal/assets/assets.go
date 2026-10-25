@@ -1,4 +1,4 @@
-// Package assets provides the frontend and third-party notices embedded in regview.
+// Package assets provides the UI and third-party notices embedded in regview.
 package assets
 
 import (
@@ -6,7 +6,7 @@ import (
 	"io/fs"
 )
 
-// embeddedAssets contains the frontend and generated third-party notices.
+// embeddedAssets contains the UI and generated third-party notices.
 // Run just generate before compiling a distributable binary.
 //
 //go:embed dist

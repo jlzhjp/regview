@@ -94,8 +94,7 @@ func Load(flags *pflag.FlagSet, file string, uid int) (Config, error) {
 			v.AddConfigPath(filepath.Join(dir, "regview"))
 		}
 		if err := v.ReadInConfig(); err != nil {
-			var missing viper.ConfigFileNotFoundError
-			if !errors.As(err, &missing) {
+			if _, ok := errors.AsType[viper.ConfigFileNotFoundError](err); !ok {
 				return Config{}, err
 			}
 		}
@@ -117,7 +116,7 @@ func Load(flags *pflag.FlagSet, file string, uid int) (Config, error) {
 
 func (c Config) Validate() error {
 	if c.PodmanBlobCacheTTL < 0 || c.PodmanBlobCacheMaxBytes < 0 || c.PodmanBlobCacheMaxEntries < 0 {
-		return fmt.Errorf("Podman blob cache settings must not be negative")
+		return fmt.Errorf("podman blob cache settings must not be negative")
 	}
 	if c.PodmanBlobCacheTTL > 0 && (c.PodmanBlobCacheMaxBytes == 0 || c.PodmanBlobCacheMaxEntries == 0) {
 		return fmt.Errorf("enabled Podman blob cache requires positive byte and entry limits")

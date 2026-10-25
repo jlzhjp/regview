@@ -11,7 +11,6 @@ import (
 	"sync/atomic"
 
 	digest "github.com/opencontainers/go-digest"
-	"github.com/opencontainers/image-spec/specs-go"
 	oci "github.com/opencontainers/image-spec/specs-go/v1"
 	"regview/internal/image"
 )
@@ -79,7 +78,7 @@ func (b *Backend) ResolveBlob(ctx context.Context, record image.Record, d digest
 func (b *Backend) Add(ref, payload string) (manifest, layer oci.Descriptor) {
 	config := b.Put([]byte(`{"architecture":"amd64","os":"linux"}`), oci.MediaTypeImageConfig)
 	layer = b.Put([]byte(payload), oci.MediaTypeImageLayer)
-	m := oci.Manifest{Versioned: specs.Versioned{SchemaVersion: 2}, MediaType: oci.MediaTypeImageManifest, Config: config, Layers: []oci.Descriptor{layer}}
+	m := oci.Manifest{SchemaVersion: 2, MediaType: oci.MediaTypeImageManifest, Config: config, Layers: []oci.Descriptor{layer}}
 	data, _ := json.Marshal(m)
 	manifest = b.Put(data, oci.MediaTypeImageManifest)
 	b.mu.Lock()

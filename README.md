@@ -257,7 +257,15 @@ just fmt       # Format Go and templ source files
 just generate  # Regenerate checked-in Go components after editing .templ files
 just test      # Race-enabled tests
 just vet
+just lint      # Validate configuration, run linters, and check Go formatting
 ```
+
+`just lint` runs golangci-lint v2.15.0 with the project Go toolchain, without a
+separate installation or changes to application dependencies. The configuration
+in [.golangci.yml](.golangci.yml) enables the standard linters plus checks for
+HTTP resource handling, error handling, suspicious code, and modernization
+(`modernize`). It also checks `gofmt` formatting and excludes generated code,
+including templ components. Run `just fmt` to format authored source files.
 
 The justfile uses `containers_image_openpgp,exclude_graphdriver_btrfs` to avoid
 optional GPGME and btrfs C dependencies. The default build supports overlay and

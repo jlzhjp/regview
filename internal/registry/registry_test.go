@@ -26,7 +26,7 @@ func TestRegistryPullAndIsolation(t *testing.T) {
 	c := catalog.New([]image.Backend{docker}, []string{"example.test:5000", "private.test"}, logger)
 	handler := registry.New(c, logger)
 	request := func(method, host, path string, headers map[string]string) *httptest.ResponseRecorder {
-		r := httptest.NewRequest(method, "http://"+host+path, nil)
+		r := httptest.NewRequestWithContext(t.Context(), method, "http://"+host+path, nil)
 		for key, value := range headers {
 			r.Header.Set(key, value)
 		}
@@ -138,7 +138,7 @@ func TestRepositoryNamesContainingEndpointSegments(t *testing.T) {
 				"/v2/" + repo + "/blobs/" + layer.Digest.String(): "layer content",
 			} {
 				w := httptest.NewRecorder()
-				handler.ServeHTTP(w, httptest.NewRequest("GET", "http://example.test"+path, nil))
+				handler.ServeHTTP(w, httptest.NewRequestWithContext(t.Context(), "GET", "http://example.test"+path, nil))
 				if w.Code != 200 || w.Body.String() != want {
 					t.Fatalf("%s: status=%d body=%s", path, w.Code, w.Body)
 				}

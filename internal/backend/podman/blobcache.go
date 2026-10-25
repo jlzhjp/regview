@@ -57,7 +57,7 @@ func (c *blobCache) acquire(ctx context.Context, l layer) (image.Blob, error) {
 		if err != nil {
 			return image.Blob{}, err
 		}
-		defer source.Close()
+		defer func() { _ = source.Close() }()
 		return exportLayer(loadCtx, layer{source: source, info: l.info, descriptor: l.descriptor})
 	})
 	if err != nil {

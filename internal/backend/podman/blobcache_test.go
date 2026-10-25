@@ -59,12 +59,12 @@ func TestCachedReaderSurvivesRequestAndFillCancellation(t *testing.T) {
 		t.Fatalf("one request closed shared file: %v", err)
 	}
 	_ = b.Close() // Active lease must remain usable across cache shutdown.
-	if _, err := second.ReaderAt.ReadAt(make([]byte, 1), 0); err != nil {
+	if _, err := second.ReadAt(make([]byte, 1), 0); err != nil {
 		t.Fatal(err)
 	}
 	_ = second.Close()
 	_ = secondRef.Close()
-	if _, err := second.ReaderAt.ReadAt(make([]byte, 1), 0); !errors.Is(err, os.ErrClosed) {
+	if _, err := second.ReadAt(make([]byte, 1), 0); !errors.Is(err, os.ErrClosed) {
 		t.Fatalf("shared file not closed: %v", err)
 	}
 	assertNoTemporaryReaders(t, dir)
@@ -101,12 +101,12 @@ func TestTTLReconstructionKeepsExistingDownloadAlive(t *testing.T) {
 		if old.ReaderAt == fresh.ReaderAt || src.readCount(src.layers[0].Digest) != 2 {
 			t.Fatal("expired reader reused")
 		}
-		if _, err := old.ReaderAt.ReadAt(make([]byte, 1), 0); err != nil {
+		if _, err := old.ReadAt(make([]byte, 1), 0); err != nil {
 			t.Fatal("expiry interrupted active download")
 		}
 		_ = old.Close()
 		_ = oldRef.Close()
-		if _, err := old.ReaderAt.ReadAt(make([]byte, 1), 0); !errors.Is(err, os.ErrClosed) {
+		if _, err := old.ReadAt(make([]byte, 1), 0); !errors.Is(err, os.ErrClosed) {
 			t.Fatal("expired reader leaked")
 		}
 		_ = fresh.Close()
@@ -130,7 +130,7 @@ func TestMeasuredReaderRemainsPinnedWithinRequestAfterExpiry(t *testing.T) {
 		if src.readCount(src.layers[0].Digest) != 1 {
 			t.Fatal("expired measurement reconstructed within its owning request")
 		}
-		if _, err := blob.ReaderAt.ReadAt(make([]byte, 1), 0); err != nil {
+		if _, err := blob.ReadAt(make([]byte, 1), 0); err != nil {
 			t.Fatal(err)
 		}
 		_ = blob.Close()

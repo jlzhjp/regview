@@ -27,16 +27,17 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger, resolver s
 	}
 	defer closeBackends(backends, logger)
 	catalog := catalog.New(backends, cfg.Hostnames, logger)
-	registryListener, err := net.Listen("tcp", cfg.RegistryListen)
+	listenConfig := net.ListenConfig{}
+	registryListener, err := listenConfig.Listen(ctx, "tcp", cfg.RegistryListen)
 	if err != nil {
 		return fmt.Errorf("registry listener: %w", err)
 	}
-	defer registryListener.Close()
-	adminListener, err := net.Listen("tcp", cfg.AdminListen)
+	defer func() { _ = registryListener.Close() }()
+	adminListener, err := listenConfig.Listen(ctx, "tcp", cfg.AdminListen)
 	if err != nil {
 		return fmt.Errorf("admin listener: %w", err)
 	}
-	defer adminListener.Close()
+	defer func() { _ = adminListener.Close() }()
 	servers := []*http.Server{
 		server(registry.New(catalog, logger), ctx),
 		server(admin.New(catalog, logger), ctx),

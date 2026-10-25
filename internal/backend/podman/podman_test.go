@@ -15,7 +15,6 @@ import (
 	"time"
 
 	digest "github.com/opencontainers/go-digest"
-	"github.com/opencontainers/image-spec/specs-go"
 	oci "github.com/opencontainers/image-spec/specs-go/v1"
 	"go.podman.io/image/v5/types"
 	"regview/internal/image"
@@ -58,8 +57,8 @@ func (s *source) readCount(d digest.Digest) int { s.mu.Lock(); defer s.mu.Unlock
 func fixture(t *testing.T, sizes ...int64) (*source, image.Record) {
 	t.Helper()
 	s := &source{blobs: make(map[digest.Digest][]byte), reads: make(map[digest.Digest]int), mediaType: image.DockerManifest}
-	config := oci.Image{Platform: oci.Platform{Architecture: "amd64", OS: "linux"}, RootFS: oci.RootFS{Type: "layers"}}
-	original := oci.Manifest{Versioned: specs.Versioned{SchemaVersion: 2}, MediaType: image.DockerManifest}
+	config := oci.Image{Architecture: "amd64", OS: "linux", RootFS: oci.RootFS{Type: "layers"}}
+	original := oci.Manifest{SchemaVersion: 2, MediaType: image.DockerManifest}
 	for i, size := range sizes {
 		data := bytes.Repeat([]byte{byte('a' + i)}, 100+i)
 		d := digest.FromBytes(data)
@@ -105,7 +104,7 @@ func prepareFixture(t *testing.T, ctx context.Context, src *source, record image
 func TestManifestUsesMetadataWithoutLayerExports(t *testing.T) {
 	src, record := fixture(t, 0, 0)
 	a := prepareFixture(t, t.Context(), src, record)
-	defer a.Close()
+	defer func() { _ = a.Close() }()
 	if a.Root.Digest == record.Target.Digest {
 		t.Fatal("original digest reused for converted bytes")
 	}
@@ -129,7 +128,7 @@ func TestManifestUsesMetadataWithoutLayerExports(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer blob.Close()
+	defer func() { _ = blob.Close() }()
 	got, err := io.ReadAll(io.NewSectionReader(blob.ReaderAt, 0, blob.Size))
 	if err != nil {
 		t.Fatal(err)
@@ -164,7 +163,7 @@ func TestUnknownSizeMeasuresOnlyAffectedLayerPerRequest(t *testing.T) {
 	if err := a.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := blob.ReaderAt.ReadAt(make([]byte, 1), 0); !errors.Is(err, os.ErrClosed) {
+	if _, err := blob.ReadAt(make([]byte, 1), 0); !errors.Is(err, os.ErrClosed) {
 		t.Fatalf("measured reader remains open: %v", err)
 	}
 	// The next request must repeat measurement, even with identical image state.
@@ -230,7 +229,7 @@ func TestCancellationDuringExportCleansUp(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	r, w := io.Pipe()
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 	done := make(chan error, 1)
 	go func() { _, err := verifyReader(ctx, r, digest.FromString("full layer"), -1); done <- err }()
 	if _, err := w.Write([]byte("partial")); err != nil {
@@ -284,7 +283,7 @@ func TestGzipEmptyLayerIsServedUncompressed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer blob.Close()
+	defer func() { _ = blob.Close() }()
 	got, err := io.ReadAll(io.NewSectionReader(blob.ReaderAt, 0, blob.Size))
 	if err != nil || !bytes.Equal(got, data) {
 		t.Fatalf("decompressed bytes: %v", err)
@@ -328,7 +327,7 @@ func TestPinnedManifestCannotSwitchOnRetagOrDeletion(t *testing.T) {
 	// must not be accepted under the old descriptor, even for the same storage ID.
 	src.manifest = []byte(`{"schemaVersion":2,"mediaType":"replacement"}`)
 	a := image.NewArtifact(record.Target)
-	defer request.Close()
+	defer func() { _ = request.Close() }()
 	if _, err := request.prepare(t.Context(), record.ID, record.Target, a, 0); err == nil {
 		t.Fatal("served replacement manifest")
 	}

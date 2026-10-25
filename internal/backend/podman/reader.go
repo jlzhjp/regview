@@ -32,7 +32,7 @@ func exportLayer(ctx context.Context, l layer) (image.Blob, error) {
 			_ = r.Close()
 			return image.Blob{}, err
 		}
-		defer gz.Close()
+		defer func() { _ = gz.Close() }()
 		// Cancellation can safely close the underlying file while Read is in
 		// progress; gzip.Reader.Close itself must not race with gzip.Reader.Read.
 		r = &readCloser{Reader: gz, close: original.Close}
@@ -59,7 +59,7 @@ func verifyReader(ctx context.Context, r io.ReadCloser, expected digest.Digest, 
 	}
 	var readerAt io.ReaderAt
 	var file *os.File
-	var output io.Writer = io.Discard
+	var output = io.Discard
 	if seekable, ok := r.(interface {
 		io.ReaderAt
 		io.Seeker

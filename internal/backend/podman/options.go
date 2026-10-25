@@ -39,11 +39,11 @@ func resolveOptions(overrides Options, load storageTypes.LoadOptions) (storage.S
 		opts.GraphDriverName = overrides.Driver
 	}
 	if opts.ImageStore != "" && opts.ImageStore == opts.GraphRoot {
-		return opts, fmt.Errorf("Podman imagestore must differ from graphroot")
+		return opts, fmt.Errorf("podman imagestore must differ from graphroot")
 	}
 	for _, path := range []string{opts.GraphRoot, opts.RunRoot, opts.ImageStore} {
 		if path != "" && !filepath.IsAbs(path) {
-			return opts, fmt.Errorf("Podman storage path must be absolute: %q", path)
+			return opts, fmt.Errorf("podman storage path must be absolute: %q", path)
 		}
 	}
 	return opts, nil

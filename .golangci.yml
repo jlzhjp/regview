@@ -1,0 +1,39 @@
+version: "2"
+
+run:
+  timeout: 5m
+  # Match the build/test recipes without optional GPGME and btrfs dependencies.
+  build-tags:
+    - containers_image_openpgp
+    - exclude_graphdriver_btrfs
+  modules-download-mode: readonly
+
+linters:
+  # errcheck, govet, ineffassign, staticcheck, and unused.
+  default: standard
+  enable:
+    - bodyclose
+    - copyloopvar
+    - durationcheck
+    - errorlint
+    - gocritic
+    - misspell
+    - modernize
+    - nilerr
+    - nilnesserr
+    - noctx
+    - nolintlint
+    - unconvert
+  settings:
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+  exclusions:
+    # Includes checked-in templ components; lint their authored Go helpers.
+    generated: strict
+
+formatters:
+  enable:
+    - gofmt
+  exclusions:
+    generated: strict

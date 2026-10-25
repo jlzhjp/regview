@@ -18,7 +18,7 @@ func TestDiscoverContainerdAndRejectClassicStore(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "docker.sock")
-			listener, err := net.Listen("unix", path)
+			listener, err := (&net.ListenConfig{}).Listen(t.Context(), "unix", path)
 			if err != nil {
 				t.Fatal(err)
 			}

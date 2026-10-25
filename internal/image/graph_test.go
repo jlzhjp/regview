@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	digest "github.com/opencontainers/go-digest"
-	"github.com/opencontainers/image-spec/specs-go"
 	oci "github.com/opencontainers/image-spec/specs-go/v1"
 	"regview/internal/image"
 	"regview/internal/testutil"
@@ -17,7 +16,7 @@ func TestIndexPreservesBytesAndTracksMissingChildren(t *testing.T) {
 	b := testutil.NewBackend("docker")
 	manifest, _ := b.Add("example.test/app:v1", "layer")
 	missing := oci.Descriptor{MediaType: oci.MediaTypeImageManifest, Digest: digest.FromString("missing"), Size: 42}
-	index := oci.Index{Versioned: specs.Versioned{SchemaVersion: 2}, MediaType: oci.MediaTypeImageIndex, Manifests: []oci.Descriptor{manifest, missing}}
+	index := oci.Index{SchemaVersion: 2, MediaType: oci.MediaTypeImageIndex, Manifests: []oci.Descriptor{manifest, missing}}
 	data, _ := json.Marshal(index)
 	root := b.Put(data, oci.MediaTypeImageIndex)
 	a, err := b.Prepare(t.Context(), image.Record{Target: root})
@@ -39,7 +38,7 @@ func TestIndexPreservesBytesAndTracksMissingChildren(t *testing.T) {
 func TestIndexPropagatesChildReadFailures(t *testing.T) {
 	backend := testutil.NewBackend("docker")
 	child, _ := backend.Add("example.test/app:v1", "layer")
-	data, err := json.Marshal(oci.Index{Versioned: specs.Versioned{SchemaVersion: 2}, MediaType: oci.MediaTypeImageIndex, Manifests: []oci.Descriptor{child}})
+	data, err := json.Marshal(oci.Index{SchemaVersion: 2, MediaType: oci.MediaTypeImageIndex, Manifests: []oci.Descriptor{child}})
 	if err != nil {
 		t.Fatal(err)
 	}

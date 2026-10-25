@@ -28,8 +28,9 @@ func main() {
 		return
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-	if err := fang.Execute(ctx, command()); err != nil {
+	err := fang.Execute(ctx, command())
+	stop()
+	if err != nil {
 		os.Exit(1)
 	}
 }

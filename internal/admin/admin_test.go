@@ -26,7 +26,7 @@ func TestViewerAndHTMXPartials(t *testing.T) {
 		{"/assets/htmx.min.js", "htmx"},
 	} {
 		w := httptest.NewRecorder()
-		r := httptest.NewRequest("GET", tc.path, nil)
+		r := httptest.NewRequestWithContext(t.Context(), "GET", tc.path, nil)
 		r.Header.Set("HX-Request", "true")
 		h.ServeHTTP(w, r)
 		if w.Code != 200 || !strings.Contains(w.Body.String(), tc.contains) {

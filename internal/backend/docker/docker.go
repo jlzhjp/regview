@@ -38,7 +38,7 @@ func New(ctx context.Context, engineSocket, socket, namespace string) (*Backend,
 		return nil, err
 	}
 	if _, err := c.Version(ctx); err != nil {
-		c.Close()
+		_ = c.Close()
 		return nil, fmt.Errorf("connect to Docker containerd at %s: %w", socket, err)
 	}
 	return &Backend{client: c}, nil
@@ -59,9 +59,9 @@ func discover(ctx context.Context, engineSocket string) (string, string, error) 
 	if err != nil {
 		return "", "", fmt.Errorf("discover containerd using Docker socket %s: %w", engineSocket, err)
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != 200 {
-		return "", "", fmt.Errorf("Docker info returned HTTP %d", response.StatusCode)
+		return "", "", fmt.Errorf("docker info returned HTTP %d", response.StatusCode)
 	}
 	var info struct {
 		DriverStatus [][2]string
@@ -76,12 +76,12 @@ func discover(ctx context.Context, engineSocket string) (string, string, error) 
 	for _, status := range info.DriverStatus {
 		if status[0] == "driver-type" && status[1] == "io.containerd.snapshotter.v1" {
 			if info.Containerd.Address == "" {
-				return "", "", fmt.Errorf("Docker did not report its containerd socket; set --docker-socket")
+				return "", "", fmt.Errorf("docker did not report its containerd socket; set --docker-socket")
 			}
 			return info.Containerd.Address, info.Containerd.Namespaces.Containers, nil
 		}
 	}
-	return "", "", fmt.Errorf("Docker uses classic image storage; only the containerd image store is supported")
+	return "", "", fmt.Errorf("docker uses classic image storage; only the containerd image store is supported")
 }
 
 func (*Backend) Name() string   { return "docker" }
@@ -108,7 +108,7 @@ func (b *Backend) Prepare(ctx context.Context, record image.Record) (*image.Arti
 		if err != nil {
 			return nil, err
 		}
-		defer blob.Close()
+		defer func() { _ = blob.Close() }()
 		return io.ReadAll(io.NewSectionReader(blob.ReaderAt, 0, desc.Size))
 	})
 	if err != nil {

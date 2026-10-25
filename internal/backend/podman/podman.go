@@ -13,7 +13,6 @@ import (
 	"strings"
 
 	digest "github.com/opencontainers/go-digest"
-	"github.com/opencontainers/image-spec/specs-go"
 	oci "github.com/opencontainers/image-spec/specs-go/v1"
 	imageStorage "go.podman.io/image/v5/storage"
 	"go.podman.io/image/v5/types"
@@ -143,7 +142,7 @@ func (b *Backend) instanceID(_ context.Context, d digest.Digest) (string, error)
 }
 func storageError(err error) error {
 	if errors.Is(err, storage.ErrImageUnknown) || errors.Is(err, imageStorage.ErrNoSuchImage) || errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("%w: %v", image.ErrNotFound, err)
+		return fmt.Errorf("%w: %w", image.ErrNotFound, err)
 	}
 	return err
 }
@@ -313,7 +312,7 @@ func (s *request) prepareImage(ctx context.Context, source types.ImageSource, da
 		a.Blobs[expected] = desc
 		layers = append(layers, desc)
 	}
-	converted := oci.Manifest{Versioned: specs.Versioned{SchemaVersion: 2}, MediaType: oci.MediaTypeImageManifest, Config: configDesc, Layers: layers, Annotations: original.Annotations}
+	converted := oci.Manifest{SchemaVersion: 2, MediaType: oci.MediaTypeImageManifest, Config: configDesc, Layers: layers, Annotations: original.Annotations}
 	if s.wantedBlob != "" {
 		return descriptor(data, mediaType), nil
 	}
@@ -375,7 +374,7 @@ func readConfig(ctx context.Context, source types.ImageSource, desc oci.Descript
 	if err != nil {
 		return nil, err
 	}
-	defer r.Close()
+	defer func() { _ = r.Close() }()
 	data, err := io.ReadAll(io.LimitReader(r, 8<<20+1))
 	if err != nil {
 		return nil, err

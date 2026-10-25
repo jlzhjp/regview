@@ -1,6 +1,7 @@
 export GO := env("GO", "go")
 tags := "containers_image_openpgp,exclude_graphdriver_btrfs"
 templ := "github.com/a-h/templ/cmd/templ@v0.3.1070"
+golangci := "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0"
 
 # Build the registry binary (default).
 build:
@@ -27,3 +28,8 @@ test:
 # Run Go static checks.
 vet:
     "$GO" vet -tags '{{ tags }}' ./...
+
+# Run the pinned linter and check Go formatting.
+lint:
+    "$GO" run {{ golangci }} config verify
+    "$GO" run {{ golangci }} run ./...

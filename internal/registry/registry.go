@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"mime"
 	"net/http"
 	"net/url"
@@ -222,7 +223,7 @@ func (h *Handler) blob(w http.ResponseWriter, r *http.Request, repo, ref string)
 		h.contentError(w, r, err, "BLOB_UNKNOWN")
 		return
 	}
-	defer resolved.Close()
+	defer func() { _ = resolved.Close() }()
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Docker-Content-Digest", d.String())
 	w.Header().Set("ETag", strconv.Quote(d.String()))
@@ -234,7 +235,7 @@ func (h *Handler) blob(w http.ResponseWriter, r *http.Request, repo, ref string)
 		h.contentError(w, r, err, "BLOB_UNKNOWN")
 		return
 	}
-	defer blob.Close()
+	defer func() { _ = blob.Close() }()
 	if blob.Size != resolved.Descriptor.Size {
 		h.contentError(w, r, fmt.Errorf("blob size differs from manifest"), "BLOB_UNKNOWN")
 		return
@@ -257,9 +258,7 @@ func serveMetadata(w http.ResponseWriter, r *http.Request, size int64) bool {
 		return false
 	}
 	clear(w.Header())
-	for key, values := range response.header {
-		w.Header()[key] = values
-	}
+	maps.Copy(w.Header(), response.header)
 	w.WriteHeader(response.status)
 	return true
 }

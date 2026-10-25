@@ -1,0 +1,86 @@
+package admin
+
+import (
+	"net/url"
+	"regview/internal/catalog"
+	"strconv"
+)
+
+templ page(view catalog.View) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>regview</title>
+			<script src="/assets/htmx.min.js" defer></script>
+		</head>
+		<body>
+			<h1>regview</h1>
+			<p>Local images exposed by the registry. Docker wins conflicting tags.</p>
+			<form action="/images" method="get" hx-get="/images" hx-target="#inventory">
+				<label for="query">Filter images</label>
+				<input id="query" name="q" type="search"/>
+				<button type="submit">Search / refresh</button>
+			</form>
+			<div id="inventory">@inventory(view)</div>
+			<section id="details" aria-live="polite"></section>
+		</body>
+	</html>
+}
+
+templ inventory(view catalog.View) {
+	<p>Live inventory queried: { view.Updated.Format("2006-01-02 15:04:05 MST") }</p>
+	<h2>Backends</h2>
+	<ul>
+		for _, status := range view.Status {
+			<li>
+				{ status.Backend }: { strconv.Itoa(status.Images) } exposed references
+				if status.Error != "" {
+					<strong>Unavailable: { status.Error }</strong>
+				}
+			</li>
+		}
+	</ul>
+	<h2>Images</h2>
+	<table>
+		<thead><tr><th>Registry</th><th>Repository</th><th>Tag</th><th>Backend</th><th>Selection</th><th>Stored digest</th><th>Manifest</th></tr></thead>
+		<tbody>
+			for _, row := range view.Rows {
+				<tr>
+					<td>{ row.Host }</td>
+					<td>{ row.Repository }</td>
+					<td>{ row.Tag }</td>
+					<td>{ row.Backend }</td>
+					<td>
+						if row.Selected {
+							<span>selected</span>
+						}
+						if row.Conflict {
+							<strong>conflict</strong>
+						}
+					</td>
+					<td><code>{ row.OriginalDigest }</code></td>
+					<td>
+						if row.Selected {
+							<a href={ templ.SafeURL(manifestURL(row)) } hx-get={ manifestURL(row) } hx-target="#details">View manifest</a>
+						}
+					</td>
+				</tr>
+			}
+		</tbody>
+	</table>
+	if len(view.Rows) == 0 {
+		<p>No images match the configured hosts and filter.</p>
+	}
+}
+
+func manifestURL(row catalog.Row) string {
+	return "/manifest?" + url.Values{"host": {row.Host}, "repository": {row.Repository}, "reference": {row.Tag}}.Encode()
+}
+
+templ manifestDetails(digest, data string) {
+	<h2>Manifest</h2>
+	<p>Served digest: <code>{ digest }</code></p>
+	<pre>{ data }</pre>
+}

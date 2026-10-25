@@ -1,0 +1,15 @@
+# Omit backends to discover all usable local backends.
+# backends: [docker, podman]
+hostnames: [docker.io, quay.io, "registry.example:5000"]
+registry-listen: 127.0.0.1:5000
+admin-listen: 127.0.0.1:8080
+podman-blob-cache-ttl: 2m
+podman-blob-cache-max-bytes: 1073741824
+podman-blob-cache-max-entries: 64
+# Engine and storage paths default to the current host user's stores.
+# docker-engine-socket: /run/user/1000/docker.sock
+# docker-socket: /run/user/1000/docker/containerd/containerd.sock
+# docker-namespace: moby
+# podman-graphroot: /home/me/.local/share/containers/storage
+# podman-runroot: /run/user/1000/containers
+# podman-driver: overlay

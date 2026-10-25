@@ -9,13 +9,14 @@ import (
 
 	"regview/internal/backend/docker"
 	"regview/internal/backend/podman"
+	"regview/internal/backend/podman/storageconfig"
 	"regview/internal/config"
 	"regview/internal/image"
 )
 
 type backendOpener func(context.Context, string) (image.Backend, error)
 
-func localOpener(cfg config.Config, logger *slog.Logger) backendOpener {
+func localOpener(cfg config.Config, logger *slog.Logger, resolver storageconfig.Resolver) backendOpener {
 	return func(ctx context.Context, name string) (image.Backend, error) {
 		switch name {
 		case "docker":
@@ -23,6 +24,7 @@ func localOpener(cfg config.Config, logger *slog.Logger) backendOpener {
 		case "podman":
 			return podman.New(podman.Options{
 				GraphRoot: cfg.PodmanGraphRoot, RunRoot: cfg.PodmanRunRoot, Driver: cfg.PodmanDriver,
+				Resolver:     resolver,
 				ExistingOnly: cfg.AutoBackends(),
 				BlobCache:    podman.BlobCacheOptions{TTL: cfg.PodmanBlobCacheTTL, MaxBytes: cfg.PodmanBlobCacheMaxBytes, MaxEntries: cfg.PodmanBlobCacheMaxEntries},
 				OnCacheError: func(err error) { logger.Warn("dispose Podman blob cache entry", "error", err) },

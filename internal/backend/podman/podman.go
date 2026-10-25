@@ -18,11 +18,13 @@ import (
 	imageStorage "go.podman.io/image/v5/storage"
 	"go.podman.io/image/v5/types"
 	"go.podman.io/storage"
+	"regview/internal/backend/podman/storageconfig"
 	"regview/internal/image"
 )
 
 type Options struct {
 	GraphRoot, RunRoot, Driver string
+	Resolver                   storageconfig.Resolver
 	ExistingOnly               bool
 	BlobCache                  BlobCacheOptions
 	OnCacheError               func(error)

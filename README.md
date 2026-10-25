@@ -98,29 +98,36 @@ Content is scoped to the requested host and repository, including digest request
   (falling back to `/run/user/<uid>/docker.sock`).
   Docker CLI contexts and remote endpoints are not automatically selected; use
   regview's explicit socket overrides for nonstandard local installations.
-- **Podman:** Go-based configuration resolution follows Podman 5's rootless
-  inheritance policy (storage v1.62.2), using the official storage library's
-  configuration types and file discovery. No Podman executable or API service
-  is needed. Rootless graphroot defaults to `$XDG_DATA_HOME/containers/storage`
-  (otherwise `~/.local/share/containers/storage`), and runroot to
-  `$XDG_RUNTIME_DIR/containers`, with the storage library's runtime fallback when
-  that variable is absent. System main-file graphroot/runroot settings belong to
-  the rootful store; user configuration, `storage.rootless.conf.d` drop-ins,
-  `CONTAINERS_STORAGE_CONF`, and `CONTAINERS_STORAGE_CONF_OVERRIDE` can override
-  the rootless paths. Legacy `rootless_storage_path` is also supported.
-  System defaults contribute the rootless-compatible driver, pull options, legacy
-  rootless path, and overlay `ignore_chown_errors` setting. Rootful additional
-  stores, mount options, and transient-store settings are not inherited.
-  User or explicitly selected rootless configuration retains its own additional
-  stores and driver options; it replaces the system configuration. The storage
-  library's user and rootless-specific drop-in support is also available.
-  `STORAGE_DRIVER` and `STORAGE_OPTS` remain supported. Regview's explicit path
-  and driver flags take precedence.
+- **Podman:** configuration is resolved through Go libraries. For rootless
+  startup, regview runs `podman --remote=false version --format json` and reads
+  `Client.Version`, with a three-second timeout. Only a detected Podman 5 client
+  selects the self-contained compatibility resolver. Podman 6 and other major
+  versions use the storage library's native resolver. Rootful runs always use
+  the native resolver and skip version detection. If the executable is absent or
+  detection fails, regview logs a warning and uses native resolution; explicitly
+  selected storage configuration can still be used without the Podman executable.
+  No Podman API service is required. Dry-run and Docker-only mode never probe
+  the Podman version.
+
+  The Podman 5 resolver follows storage v1.62.2's selective rootless inheritance:
+  system defaults contribute the compatible driver, pull options, legacy
+  rootless path, and overlay `ignore_chown_errors` setting. Rootful paths,
+  additional stores, mount options, and transient-store settings are not inherited.
+  User or explicitly selected rootless configuration retains its own options.
+  Native resolution applies the current storage library's configuration rules.
+
+  When paths are not configured, rootless graphroot defaults to
+  `$XDG_DATA_HOME/containers/storage` (otherwise `~/.local/share/containers/storage`),
+  and runroot to `$XDG_RUNTIME_DIR/containers`, with the library's runtime fallback
+  when that variable is absent. Storage configuration, drop-ins,
+  `CONTAINERS_STORAGE_CONF`, `CONTAINERS_STORAGE_CONF_OVERRIDE`, `STORAGE_DRIVER`,
+  and `STORAGE_OPTS` remain supported. Regview's explicit path and driver flags
+  take precedence after the selected resolver runs.
   Rootless runs re-exec into a user namespace using the storage library's helpers;
   `newuidmap`, `newgidmap`, and subordinate UID/GID mappings may be required.
   Automatic discovery can continue with Docker if namespace setup is unavailable.
-  An inaccessible additional image store explicitly configured for rootless use
-  makes the Podman backend unavailable; discovery does not silently discard it.
+  An inaccessible additional image store selected by the resolver makes the
+  Podman backend unavailable; discovery does not silently discard it.
 
 Explicit overrides are available for custom installations:
 
@@ -277,3 +284,8 @@ Measured sizes reuse that same reader entry rather than maintaining a second
 cache. Tests cover expiry with active readers, idle cleanup, cancellation of
 individual/all waiters, eviction, oversized values, failure retries, and cached
 reader isolation from live repository resolution.
+
+Podman configuration resolution is injected as a function through the backend's
+options. `internal/backend/podman/storageconfig` owns native resolution and
+startup selection; its `podman5` subpackage owns all compatibility behavior and
+its tests. The image reader and application do not implement compatibility rules.

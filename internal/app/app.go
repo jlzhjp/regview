@@ -12,15 +12,16 @@ import (
 	"time"
 
 	"regview/internal/admin"
+	"regview/internal/backend/podman/storageconfig"
 	"regview/internal/catalog"
 	"regview/internal/config"
 	"regview/internal/registry"
 )
 
-func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
+func Run(ctx context.Context, cfg config.Config, logger *slog.Logger, resolver storageconfig.Resolver) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	backends, err := openBackends(ctx, cfg.Backends, localOpener(cfg, logger), logger)
+	backends, err := openBackends(ctx, cfg.Backends, localOpener(cfg, logger, resolver), logger)
 	if err != nil {
 		return err
 	}

@@ -4,12 +4,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"go.podman.io/storage"
-	"go.podman.io/storage/pkg/unshare"
 	storageTypes "go.podman.io/storage/types"
+	"regview/internal/backend/podman/storageconfig"
 )
 
 // ResolveOptions resolves configuration without opening an image store. Rootless
@@ -19,14 +18,11 @@ func ResolveOptions(overrides Options) (storage.StoreOptions, error) {
 }
 
 func resolveOptions(overrides Options, load storageTypes.LoadOptions) (storage.StoreOptions, error) {
-	var opts storage.StoreOptions
-	var err error
-	uid := unshare.GetRootlessUID()
-	if uid == 0 {
-		opts, err = storageTypes.LoadStoreOptions(load)
-	} else {
-		opts, err = loadRootlessOptions(uid, load)
+	resolver := overrides.Resolver
+	if resolver == nil {
+		resolver = storageconfig.Native
 	}
+	opts, err := resolver(load)
 	if err != nil {
 		return opts, fmt.Errorf("resolve Podman storage: %w", err)
 	}
@@ -51,14 +47,6 @@ func resolveOptions(overrides Options, load storageTypes.LoadOptions) (storage.S
 		}
 	}
 	return opts, nil
-}
-
-func expandStoragePath(path string, uid int) string {
-	path = os.ExpandEnv(strings.ReplaceAll(path, "$UID", strconv.Itoa(uid)))
-	if resolved, err := filepath.EvalSymlinks(path); err == nil {
-		return resolved
-	}
-	return filepath.Clean(path)
 }
 
 // ExistingStore prevents discovery from creating a new, empty image store.

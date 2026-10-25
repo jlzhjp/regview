@@ -1,4 +1,5 @@
-package podman
+// Package podman5 implements the Podman 5 rootless storage configuration policy.
+package podman5
 
 import (
 	"fmt"
@@ -18,11 +19,14 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// Rootless inheritance follows Podman 5's storage v1.62.2 policy. The newer
+// Resolve applies Podman 5's storage v1.62.2 rootless inheritance policy. The newer
 // reader library applies rootful options wholesale; using it as the rootless
 // resolver would silently attach system image stores and mount options.
 // File discovery and TOML types still come from the official storage library.
-func loadRootlessOptions(uid int, load storageTypes.LoadOptions) (storage.StoreOptions, error) {
+func Resolve(uid int, load storageTypes.LoadOptions) (storage.StoreOptions, error) {
+	if uid == 0 {
+		return storageTypes.LoadStoreOptions(load)
+	}
 	system, user, explicit, err := readStorageConfig(uid, load)
 	if err != nil {
 		return storage.StoreOptions{}, err
@@ -197,4 +201,12 @@ func rootlessDriver(graph string) string {
 		}
 	}
 	return "vfs"
+}
+
+func expandStoragePath(path string, uid int) string {
+	path = os.ExpandEnv(strings.ReplaceAll(path, "$UID", strconv.Itoa(uid)))
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		return resolved
+	}
+	return filepath.Clean(path)
 }

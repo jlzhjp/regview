@@ -1,4 +1,4 @@
-package podman
+package podman5
 
 import (
 	"os"
@@ -43,7 +43,7 @@ ignore_chown_errors = "true"
 enable_partial_images = "true"
 `)
 	load := storageTypes.LoadOptions{RootForImplicitAbsolutePaths: root}
-	opts, err := loadRootlessOptions(1234, load)
+	opts, err := Resolve(1234, load)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +58,7 @@ enable_partial_images = "true"
 	}
 	// A user file replaces the system configuration, including empty tables.
 	writeStorageConfig(t, filepath.Join(user, "containers/storage.conf"), "[storage]\n")
-	opts, err = loadRootlessOptions(1234, load)
+	opts, err = Resolve(1234, load)
 	if err != nil || opts.GraphRoot != filepath.Join(data, "containers/storage") || len(opts.GraphDriverOptions) != 0 || len(opts.PullOptions) != 0 {
 		t.Fatalf("user configuration inherited system settings: %+v, %v", opts, err)
 	}
@@ -72,25 +72,25 @@ additionalimagestores = ["/user/shared"]
 mount_program = "/user/mount-program"
 mountopt = "nodev"
 `)
-	opts, err = loadRootlessOptions(1234, load)
+	opts, err = Resolve(1234, load)
 	if err != nil || opts.ImageStore != "/user/images" || !opts.TransientStore || !slices.Contains(opts.GraphDriverOptions, "imagestore=/user/shared") || !slices.Contains(opts.GraphDriverOptions, "overlay.mount_program=/user/mount-program") || !slices.Contains(opts.GraphDriverOptions, "overlay.mountopt=nodev") {
 		t.Fatalf("explicit rootless options lost: %+v, %v", opts, err)
 	}
 	// Environment options remain explicit and must not be filtered as system options.
 	t.Setenv("STORAGE_DRIVER", "vfs")
 	t.Setenv("STORAGE_OPTS", "vfs.ignore_chown_errors=true")
-	opts, err = loadRootlessOptions(1234, load)
+	opts, err = Resolve(1234, load)
 	if err != nil || opts.GraphDriverName != "vfs" || !reflect.DeepEqual(opts.GraphDriverOptions, []string{"vfs.ignore_chown_errors=true"}) {
 		t.Fatalf("environment options: %+v, %v", opts, err)
 	}
 	t.Setenv("STORAGE_OPTS", "")
-	opts, err = loadRootlessOptions(1234, load)
+	opts, err = Resolve(1234, load)
 	if err != nil || len(opts.GraphDriverOptions) != 0 {
 		t.Fatalf("explicitly empty STORAGE_OPTS: %+v, %v", opts, err)
 	}
 	// User graphroot wins over the legacy path, and both roots expand $UID.
 	writeStorageConfig(t, filepath.Join(user, "containers/storage.conf"), "[storage]\nrootless_storage_path = \"/legacy\"\ngraphroot = \"$XDG_DATA_HOME/graph-$UID\"\nrunroot = \"$XDG_DATA_HOME/run-$UID\"\n")
-	opts, err = loadRootlessOptions(1234, load)
+	opts, err = Resolve(1234, load)
 	if err != nil || opts.GraphRoot != filepath.Join(data, "graph-1234") || opts.RunRoot != filepath.Join(data, "run-1234") {
 		t.Fatalf("explicit roots and legacy precedence: %+v, %v", opts, err)
 	}
@@ -108,13 +108,23 @@ func TestRootlessExistingDriverAndPriority(t *testing.T) {
 	path := filepath.Join(root, "usr/share/containers/storage.conf")
 	writeStorageConfig(t, path, "[storage]\ndriver = \"zfs\"\n[storage.options]\nadditionalimagestores = [\"/rootful/shared\"]\n")
 	load := storageTypes.LoadOptions{RootForImplicitAbsolutePaths: root}
-	opts, err := loadRootlessOptions(1234, load)
+	opts, err := Resolve(1234, load)
 	if err != nil || opts.GraphDriverName != "vfs" || len(opts.GraphDriverOptions) != 0 {
 		t.Fatalf("existing rootless driver: %+v, %v", opts, err)
 	}
 	writeStorageConfig(t, path, "[storage]\ndriver = \"zfs\"\ndriver_priority = [\"vfs\", \"overlay\"]\n")
-	opts, err = loadRootlessOptions(1234, load)
+	opts, err = Resolve(1234, load)
 	if err != nil || opts.GraphDriverName != "" || !reflect.DeepEqual(opts.GraphDriverPriority, []string{"vfs", "overlay"}) {
 		t.Fatalf("rootless driver priority: %+v, %v", opts, err)
+	}
+}
+
+func writeStorageConfig(t *testing.T, path, body string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
 	}
 }

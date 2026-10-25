@@ -18,6 +18,7 @@ import (
 	"go.podman.io/storage/pkg/unshare"
 	"regview/internal/app"
 	"regview/internal/backend/podman"
+	"regview/internal/backend/podman/storageconfig"
 	"regview/internal/config"
 	"regview/internal/rootless"
 )
@@ -51,11 +52,18 @@ func command() *cobra.Command {
 			return encoder.Encode(cfg)
 		}
 		logger := slog.New(slog.NewTextHandler(cmd.ErrOrStderr(), nil))
+		selected := storageconfig.Selection{Name: "native", Resolve: storageconfig.Native}
+		if cfg.AutoBackends() || slices.Contains(cfg.Backends, "podman") {
+			selected = storageconfig.Discover(cmd.Context(), unshare.GetRootlessUID())
+			if selected.Warning != nil {
+				logger.Warn("cannot identify local Podman version; using native storage resolver", "error", selected.Warning)
+			}
+		}
 		// Resolve the user's store before re-exec. UID 0 inside the namespace
 		// must never select the host's system store. Discovery must also work
 		// when Podman or user namespaces are unavailable on a Docker-only host.
 		if os.Geteuid() != 0 && (cfg.AutoBackends() || slices.Contains(cfg.Backends, "podman")) {
-			opts, setupErr := podman.ResolveOptions(podman.Options{GraphRoot: cfg.PodmanGraphRoot, RunRoot: cfg.PodmanRunRoot, Driver: cfg.PodmanDriver})
+			opts, setupErr := podman.ResolveOptions(podman.Options{GraphRoot: cfg.PodmanGraphRoot, RunRoot: cfg.PodmanRunRoot, Driver: cfg.PodmanDriver, Resolver: selected.Resolve})
 			if setupErr == nil && cfg.AutoBackends() {
 				setupErr = podman.ExistingStore(opts)
 			}
@@ -72,7 +80,10 @@ func command() *cobra.Command {
 			logger.Warn("skip unavailable local backend", "backend", "podman", "error", setupErr)
 			cfg.Backends = []string{"docker"}
 		}
-		return app.Run(cmd.Context(), cfg, logger)
+		if cfg.AutoBackends() || slices.Contains(cfg.Backends, "podman") {
+			logger.Info("selected Podman storage resolver", "resolver", selected.Name, "version", selected.Version)
+		}
+		return app.Run(cmd.Context(), cfg, logger, selected.Resolve)
 	}
 	return cmd
 }

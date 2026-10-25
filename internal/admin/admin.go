@@ -1,20 +1,17 @@
-// Package admin serves a plain HTML viewer using templ and htmx.
+// Package admin serves an HTML viewer using templ and bundled frontend assets.
 package admin
 
 import (
-	"embed"
 	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
 	"strings"
 
+	"regview/internal/assets"
 	"regview/internal/catalog"
 	"regview/internal/image"
 )
-
-//go:embed assets/htmx.min.js
-var assets embed.FS
 
 func New(c *catalog.Catalog, logger *slog.Logger) http.Handler {
 	mux := http.NewServeMux()
@@ -24,7 +21,7 @@ func New(c *catalog.Catalog, logger *slog.Logger) http.Handler {
 			logger.Error("render admin page", "error", err)
 		}
 	})
-	mux.Handle("GET /assets/", http.FileServerFS(assets))
+	mux.Handle("GET /assets/", http.StripPrefix("/assets/", http.FileServerFS(assets.FS())))
 	mux.HandleFunc("GET /images", func(w http.ResponseWriter, r *http.Request) {
 		view := c.View(r.Context())
 		query := r.URL.Query().Get("q")

@@ -3,7 +3,8 @@
 Expose local Docker and Podman images through a read-only OCI/Docker registry,
 with a separate plain HTML admin viewer.
 
-Requires Linux and Go 1.27.3 or newer. Development recipes use just. Docker must
+Requires Linux and Go 1.27.3 or newer. Building frontend assets also requires
+Node.js 22.18+ and pnpm 12.15.0. Development recipes use just. Docker must
 use the **containerd image store**; classic graph-driver image storage is unsupported. Podman uses its
 configured containers storage, without requiring a Podman API service.
 
@@ -33,6 +34,12 @@ If the checkout has no readable Git metadata, build with
 Serving is the default command. The registry listens on `127.0.0.1:5000` and
 the admin viewer on `http://127.0.0.1:8080`. Both use HTTP and Go's built-in
 `http.ServeMux`. There is currently no authentication or TLS.
+
+Run `./bin/regview licenses` to print the third-party license notices embedded
+in this build, similar to `gh licenses`. It works offline, writes to standard
+output, and does not load configuration, open image stores, or start listeners.
+Notices appear in one alphabetically sorted list. For interactive reading, use
+`./bin/regview licenses | less`.
 
 Omit `backends` to discover all usable local Docker and Podman backends at startup.
 Discovery opens each existing store and checks that image metadata is readable;
@@ -253,14 +260,34 @@ use the same flag/environment/file precedence as other settings.
 ## Development
 
 ```sh
-just fmt       # Format Go and templ source files
-just generate  # Regenerate checked-in Go components after editing .templ files
-just test      # Race-enabled tests
+pnpm install --frozen-lockfile
+pnpm build     # Build frontend assets for Go embedding
+pnpm typecheck # Check frontend and Vite configuration TypeScript
+pnpm dev       # Watch frontend sources and rebuild assets
+just frontend-lint # Check frontend lint, formatting, types, and Tailwind classes
+just frontend-fmt  # Format frontend sources, scripts, and configuration
+just fmt       # Format frontend, Go, and templ source files
+just licenses  # Build frontend and archive all dependency notices
+just generate  # Run licenses and regenerate templ components
+just test      # Generate assets/notices and run race-enabled tests
 just vet
 just lint      # Validate configuration, run linters, and check Go formatting
 ```
 
-`just lint` runs golangci-lint v2.15.0 with the project Go toolchain, without a
+`just lint` includes `just frontend-lint`: Oxlint checks TypeScript correctness,
+Oxfmt checks formatting, TypeScript checks types, and `scripts/tailwind-check.ts`
+reports non-canonical Tailwind classes with file, line, column, and a suggested
+replacement. The checker scans static class attributes in `.templ` and TypeScript
+sources, arbitrary-value class strings in TypeScript, and CSS `@apply` directives.
+Dynamic expressions are skipped. It loads the project's CSS design system, so
+custom classes remain valid. Tailwind and its Node/Vite packages are pinned to
+4.3.3 because the canonicalization API is unstable; review the checker when
+upgrading them. These tools are development dependencies and stay out of the
+production license collection. The same checks are available through `pnpm lint`,
+`pnpm fmt:check`, `pnpm typecheck`, and `pnpm tailwind-check`; `pnpm fmt` applies
+frontend formatting. Generated assets are excluded from linting and formatting.
+
+`just lint` also runs golangci-lint v2.15.0 with the project Go toolchain, without a
 separate installation or changes to application dependencies. The configuration
 in [.golangci.yml](.golangci.yml) enables the standard linters plus checks for
 HTTP resource handling, error handling, suspicious code, and modernization
@@ -273,9 +300,86 @@ vfs storage. Builds requiring the btrfs driver should remove the latter tag and
 install the driver's development dependencies. Go builds outside the justfile
 need the same tags unless those optional dependencies are installed.
 
-The browser uses locally embedded htmx 2.0.8 and templ-generated HTML, with no
-authored CSS or styling framework. The htmx distribution is covered by the
-[zero-clause BSD license](internal/admin/assets/HTMX-LICENSE).
+The browser uses templ-generated HTML, HTMX, Tailwind CSS, and Pixelarticons.
+Frontend files are organized as follows:
+
+```text
+frontend/
+  src/
+    app.ts              # Browser behavior and JS entry point
+    app.css             # Tailwind styles and icon imports
+scripts/
+  collect-npm-licenses.ts # Collect installed npm license and notice files
+internal/admin/
+  admin.go              # HTTP routes, including /assets/
+  views.templ           # Admin HTML components
+internal/assets/
+  assets.go             # Embedded filesystem shared by HTTP and CLI consumers
+  licenses.go           # Read and print bundled third-party notices
+  dist/                 # Generated files (gitignored)
+    frontend/           # Vite output: app.js, app.css, and font
+    licenses.tar.gz     # Combined Go and npm license collection
+```
+
+Vite builds `frontend/src/app.ts` into `internal/assets/dist/frontend/`.
+`just licenses` builds the frontend and collects dependency notices into
+`internal/assets/dist/licenses.tar.gz`. The `assets` package embeds the generated
+files and provides license output to the CLI; the `admin` package serves the files
+at `/assets/`. The entry files are `/assets/frontend/app.js` and
+`/assets/frontend/app.css`. Source files stay
+outside the embedded directory. `just build`, `just test`,
+`just vet`, and `just lint` install locked dependencies and build the frontend
+first; direct Go commands require `just generate` beforehand, including on a fresh
+checkout. The frontend and Vite configuration use strict TypeScript, and
+`pnpm build` runs type checking before bundling.
+After editing frontend or templ sources, run `pnpm build`
+and `just generate` as needed; rebuild/restart Go to see embedded asset changes.
+`pnpm dev` watches and rebuilds assets; it does not start a standalone web server.
+The viewer provides system/light/dark themes, a saved theme preference, keyboard
+focus styles, a skip link, labeled controls, and live update/error announcements.
+Its compact interface uses square controls, thin borders, and a self-hosted IBM
+Plex Mono variable WOFF2 font. The prebuilt font package's telemetry install script
+and unused telemetry dependency are disabled in `pnpm-workspace.yaml`.
+All browser assets are served locally. License notices are generated from the
+installed dependencies rather than maintained by hand:
+
+- `just licenses` runs `node scripts/collect-npm-licenses.ts <staging-directory>`;
+  the script uses `pnpm licenses list --prod --json` to discover installed
+  npm production dependencies, including transitive and optional dependencies.
+  Development dependencies are excluded.
+  `pnpm-workspace.yaml` marks Pixelarticons' React peer as optional because this
+  app uses its SVGs only; React is not installed or included in the notices.
+  The script copies root license, copying, and notice files into the archive's
+  `npm/<package>@<version>/` directories. `npm/index.json` records package
+  names, versions, declared licenses, and copied filenames without local paths.
+  Packages shipping no root notice file produce a warning and a metadata entry.
+- The same `just licenses` recipe runs pinned `go-licenses/v2@v2.0.1 save` against `./cmd/regview` using the application
+  build tags. It collects Go license texts, notices, and any source files the
+  tool requires under `go/` in the same archive. Archiving preserves nested Go
+  modules and hidden files that directory embedding would otherwise omit.
+  The project's own `regview` packages are excluded; their third-party
+  dependencies are still scanned. This step requires `tar`.
+- `just generate` runs `just licenses` and regenerates templ components;
+  `just build` runs this full generation step before compiling. The resulting
+  binary serves the combined archive at `/assets/licenses.tar.gz`, and
+  `regview licenses` prints all notices in one alphabetical list.
+  Plain `pnpm build` and `pnpm dev` rebuild only `dist/frontend/`, preserving the
+  sibling license archive. Run `just generate` before a direct Go build intended
+  for distribution so that notices match the current dependencies.
+
+The collectors cover npm production dependencies and the selected Go dependency graph.
+As go-licenses reports, native code and system-library dependencies require
+separate review; these tools do not discover those dependencies automatically.
+
+Vite/Rolldown reports an `EVAL` warning for HTMX 2.0.11's `internalEval` helper
+(exposed as `htmx._`). Direct eval can access local scope, which complicates
+bundling and minification. The viewer disables HTMX's eval-dependent features
+using `allowEval: false`; its requests and swaps do not need them. This runtime
+setting does not remove the eval expression from the dependency, so the static
+build warning remains. Replacing it with indirect eval would change HTMX's scope
+semantics; the dependency is left intact and the warning is not suppressed.
+See [Rolldown's explanation](https://rolldown.rs/guide/troubleshooting#avoiding-direct-eval)
+and [HTMX configuration](https://htmx.org/docs/#config).
 
 The code is separated into storage adapters, immutable image/content values,
 catalog merging and lookup, registry protocol, admin presentation, configuration,

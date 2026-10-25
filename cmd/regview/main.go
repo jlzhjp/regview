@@ -17,6 +17,7 @@ import (
 	"go.podman.io/storage/pkg/reexec"
 	"go.podman.io/storage/pkg/unshare"
 	"regview/internal/app"
+	"regview/internal/assets"
 	"regview/internal/backend/podman"
 	"regview/internal/backend/podman/storageconfig"
 	"regview/internal/config"
@@ -39,6 +40,15 @@ func command() *cobra.Command {
 	var configFile string
 	var dryRun bool
 	cmd := &cobra.Command{Use: "regview", Short: "Expose local Docker and Podman images as a read-only registry", Args: cobra.NoArgs}
+	cmd.AddCommand(&cobra.Command{
+		Use:   "licenses",
+		Short: "View third-party license information",
+		Long:  "View license information for Go and npm production dependencies included in this build of regview.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return assets.WriteLicenses(cmd.OutOrStdout())
+		},
+	})
 	config.Flags(cmd.Flags(), config.Defaults(unshare.GetRootlessUID()))
 	cmd.Flags().StringVar(&configFile, "config", "", "Configuration file (default: user/system regview.yaml)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Validate and print resolved settings without opening stores or listeners")

@@ -1,0 +1,40 @@
+{
+  "name": "regview",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "pnpm typecheck && vite build",
+    "typecheck": "tsc --noEmit",
+    "dev": "vite build --watch",
+    "lint": "oxlint --deny-warnings frontend/src scripts vite.config.ts",
+    "fmt": "oxfmt frontend scripts vite.config.ts package.json tsconfig.json pnpm-workspace.yaml .oxlintrc.json .oxfmtrc.json",
+    "fmt:check": "oxfmt --check frontend scripts vite.config.ts package.json tsconfig.json pnpm-workspace.yaml .oxlintrc.json .oxfmtrc.json",
+    "tailwind-check": "node scripts/tailwind-check.ts"
+  },
+  "dependencies": {
+    "@ibm/plex-mono-variable": "^1.0.0",
+    "htmx.org": "^2.0.11",
+    "pixelarticons": "^2.4.2"
+  },
+  "devDependencies": {
+    "@tailwindcss/node": "4.3.3",
+    "@tailwindcss/vite": "4.3.3",
+    "@types/node": "^26.6.5",
+    "oxfmt": "^0.74.0",
+    "oxlint": "^1.89.0",
+    "tailwindcss": "4.3.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "12.15.0",
+      "onFail": "download"
+    }
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "packageManager": "pnpm@12.15.0"
+}

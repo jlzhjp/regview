@@ -1,0 +1,12 @@
+packageExtensions:
+  # This app imports SVGs; only Pixelarticons' React components need React.
+  pixelarticons@2.4.2:
+    peerDependenciesMeta:
+      react:
+        optional: true
+
+# Fonts are prebuilt; installation does not need IBM's telemetry script or CLI.
+allowBuilds:
+  '@ibm/plex-mono-variable': false
+overrides:
+  '@ibm/plex-mono-variable>@ibm/telemetry-js': '-'

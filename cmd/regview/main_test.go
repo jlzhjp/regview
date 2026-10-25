@@ -73,3 +73,27 @@ func TestAutomaticDryRunDoesNotResolveStorage(t *testing.T) {
 		t.Fatal("automatic selection not preserved:", output.String())
 	}
 }
+
+func TestLicensesDoesNotOpenBackendOrLoadConfig(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	t.Setenv("REGVIEW_CONFIG", "/does/not/exist/config.yaml")
+	t.Setenv("CONTAINERS_STORAGE_CONF", "/does/not/exist/storage.conf")
+	t.Setenv("REGVIEW_BACKENDS", "invalid-backend")
+	cmd := command()
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+	cmd.SetArgs([]string{"licenses"})
+	if err := cmd.ExecuteContext(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"Third-party licenses for regview", "github.com/spf13/cobra/LICENSE", "htmx.org@", "pixelarticons@", "Copyright (c) 2019 Gerrit Halfmann"} {
+		if !strings.Contains(output.String(), want) {
+			t.Errorf("missing %q in license output", want)
+		}
+	}
+	for _, unwanted := range []string{"Go dependencies", "npm production dependencies", "--- react@", "--- vite@", "--- typescript@", "--- @tailwindcss/vite@", "func main("} {
+		if strings.Contains(output.String(), unwanted) {
+			t.Errorf("unexpected %q in license output", unwanted)
+		}
+	}
+}

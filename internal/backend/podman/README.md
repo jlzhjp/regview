@@ -77,12 +77,12 @@ supported. A cached range download reuses the verified file. A cache miss
 reconstructs and verifies the complete layer before sending just the requested
 range. No blob cache hit bypasses current exposure and repository membership
 checks. Blob lookup ignores the request authority but requires a matching
-repository on a locally exposed source registry.
+repository path on a locally exposed registry domain.
 
 The original configuration blob is preserved. Generated Podman OCI manifests
 usually have different digests from the stored manifests. Digest lookup regenerates
-candidate manifests only within the requested host and repository. Original
-digests are never aliased to modified bytes. Signatures and attestations tied to
+candidate manifests only within the requested registry domain and repository path.
+Original digests are never aliased to modified bytes. Signatures and attestations tied to
 the original manifest are not carried over as verified metadata.
 
 OCI and Docker schema-2 manifests and indexes are supported. Docker indexes retain

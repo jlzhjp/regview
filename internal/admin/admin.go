@@ -29,7 +29,7 @@ func New(c *catalog.Catalog, logger *slog.Logger) http.Handler {
 		if query != "" {
 			rows := make([]catalog.Row, 0, len(view.Rows))
 			for _, row := range view.Rows {
-				if strings.Contains(row.Host+"/"+row.Repository+":"+row.Tag+" "+row.Backend, query) {
+				if strings.Contains(row.Domain+"/"+row.Path+":"+row.Tag+" "+row.Backend, query) {
 					rows = append(rows, row)
 				}
 			}

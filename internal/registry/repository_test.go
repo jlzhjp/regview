@@ -14,7 +14,7 @@ func TestRepositoryPathValidation(t *testing.T) {
 		"team/app---name",
 		strings.Repeat("a", 255),
 	} {
-		if !validRepository(repo) {
+		if !validRepositoryPath(repo) {
 			t.Errorf("rejected valid repository %q", repo)
 		}
 	}
@@ -31,7 +31,7 @@ func TestRepositoryPathValidation(t *testing.T) {
 		"team/app@sha256:" + strings.Repeat("a", 64),
 		strings.Repeat("a", 256),
 	} {
-		if validRepository(repo) {
+		if validRepositoryPath(repo) {
 			t.Errorf("accepted invalid repository %q", repo)
 		}
 	}

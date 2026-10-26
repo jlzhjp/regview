@@ -54,12 +54,12 @@ func (*Handler) ping(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) dispatch(w http.ResponseWriter, r *http.Request) {
 	path := r.PathValue("path")
-	if repo, ok := strings.CutSuffix(path, "/tags/list"); ok {
-		if !validRepository(repo) {
+	if repositoryPath, ok := strings.CutSuffix(path, "/tags/list"); ok {
+		if !validRepositoryPath(repositoryPath) {
 			failure(w, r, 400, "NAME_INVALID", "invalid repository name")
 			return
 		}
-		h.tags(w, r, repo)
+		h.tags(w, r, repositoryPath)
 		return
 	}
 	// These words are also valid repository path components. The rightmost
@@ -71,8 +71,8 @@ func (h *Handler) dispatch(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if offset >= 0 {
-		repo, ref := path[:offset], path[offset+len(kind)+2:]
-		if !validRepository(repo) {
+		repositoryPath, ref := path[:offset], path[offset+len(kind)+2:]
+		if !validRepositoryPath(repositoryPath) {
 			failure(w, r, 400, "NAME_INVALID", "invalid repository name")
 			return
 		}
@@ -81,23 +81,23 @@ func (h *Handler) dispatch(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if kind == "manifests" {
-			h.manifest(w, r, repo, ref)
+			h.manifest(w, r, repositoryPath, ref)
 		} else {
-			h.blob(w, r, repo, ref)
+			h.blob(w, r, repositoryPath, ref)
 		}
 		return
 	}
 	failure(w, r, 404, "NAME_UNKNOWN", "unknown registry endpoint")
 }
 
-func validRepository(repo string) bool {
-	if repo == "" {
+func validRepositoryPath(repositoryPath string) bool {
+	if repositoryPath == "" {
 		return false
 	}
-	// WithName accepts an optional registry authority. Supply one explicitly so
-	// every component of repo is validated as a path, never as a hostname or port.
-	named, err := reference.WithName("registry.invalid/" + repo)
-	return err == nil && reference.Path(named) == repo
+	// WithName accepts an optional registry domain. Supply one explicitly so
+	// every component of repositoryPath is validated as a path, never as a hostname or port.
+	named, err := reference.WithName("registry.invalid/" + repositoryPath)
+	return err == nil && reference.Path(named) == repositoryPath
 }
 
 func (h *Handler) repositories(w http.ResponseWriter, r *http.Request) {
@@ -116,8 +116,8 @@ func (h *Handler) repositories(w http.ResponseWriter, r *http.Request) {
 	}{values})
 }
 
-func (h *Handler) tags(w http.ResponseWriter, r *http.Request, repo string) {
-	values, err := h.catalog.Tags(r.Context(), r.Host, repo)
+func (h *Handler) tags(w http.ResponseWriter, r *http.Request, repositoryPath string) {
+	values, err := h.catalog.Tags(r.Context(), r.Host, repositoryPath)
 	if err != nil {
 		h.contentError(w, r, err, "NAME_UNKNOWN")
 		return
@@ -130,7 +130,7 @@ func (h *Handler) tags(w http.ResponseWriter, r *http.Request, repo string) {
 	writeJSON(w, r, 200, struct {
 		Name string   `json:"name"`
 		Tags []string `json:"tags"`
-	}{repo, values})
+	}{repositoryPath, values})
 }
 
 func paginate(w http.ResponseWriter, r *http.Request, values []string) ([]string, error) {
@@ -167,8 +167,8 @@ func paginate(w http.ResponseWriter, r *http.Request, values []string) ([]string
 	return values, nil
 }
 
-func (h *Handler) manifest(w http.ResponseWriter, r *http.Request, repo, ref string) {
-	manifest, err := h.catalog.Manifest(r.Context(), r.Host, repo, ref)
+func (h *Handler) manifest(w http.ResponseWriter, r *http.Request, repositoryPath, tagOrDigest string) {
+	manifest, err := h.catalog.Manifest(r.Context(), r.Host, repositoryPath, tagOrDigest)
 	if err != nil {
 		h.contentError(w, r, err, "MANIFEST_UNKNOWN")
 		return
@@ -207,13 +207,13 @@ func accepts(headers []string, mediaType string) bool {
 	return false
 }
 
-func (h *Handler) blob(w http.ResponseWriter, r *http.Request, repo, ref string) {
-	d, err := digest.Parse(ref)
+func (h *Handler) blob(w http.ResponseWriter, r *http.Request, repositoryPath, digestText string) {
+	d, err := digest.Parse(digestText)
 	if err != nil {
 		failure(w, r, 400, "DIGEST_INVALID", "invalid blob digest")
 		return
 	}
-	resolved, err := h.catalog.Blob(r.Context(), repo, d)
+	resolved, err := h.catalog.Blob(r.Context(), repositoryPath, d)
 	if err != nil {
 		h.contentError(w, r, err, "BLOB_UNKNOWN")
 		return

@@ -1,4 +1,9 @@
-// Package catalog merges backend inventories and scopes content to registry repositories.
+// Package catalog merges fresh backend inventories and scopes content to registry
+// domains and repository paths. A registry domain includes an optional port;
+// domain plus repository path forms a repository name, such as
+// registry.example:5000/team/app. An image reference adds an optional tag or digest.
+// Listings and manifests are scoped to the request authority. Blob lookup uses
+// repository membership across all exposed registry domains.
 package catalog
 
 import (
@@ -15,51 +20,78 @@ import (
 	"regview/internal/image"
 )
 
-type Name struct{ Host, Repository, Tag string }
+// Reference is a parsed image reference. For registry.example:5000/team/app:v1,
+// Domain is registry.example:5000 (including the port), Path is team/app, and Tag
+// is v1. Digest holds an optional @digest from the reference; it is distinct from
+// the backend record's pinned target digest. Tag and Digest may both be present.
+type Reference struct {
+	Domain, Path string
+	Tag          string
+	Digest       digest.Digest
+}
 
-// ParseName uses standard Docker short-name expansion, while preserving explicit authorities.
-func ParseName(value string) (Name, error) {
+// ParseReference uses reference.ParseNormalizedNamed for Docker short-name
+// expansion, while preserving explicitly written domains. It defaults Tag to
+// latest only when neither a tag nor a digest is present.
+//
+// Examples; <hex> denotes 64 hexadecimal digits:
+//
+//	alpine                    -> docker.io, library/alpine, latest
+//	team/app:v1               -> docker.io, team/app, v1
+//	localhost:5000/team/app   -> localhost:5000, team/app, latest
+//	quay.io/team/app@sha256:<hex> -> quay.io, team/app, "", sha256:<hex>
+func ParseReference(value string) (Reference, error) {
 	named, err := reference.ParseNormalizedNamed(value)
 	if err != nil {
-		return Name{}, err
+		return Reference{}, err
 	}
 	// ParseNormalizedNamed expands short names, but also aliases index.docker.io.
-	// Explicit authorities must retain their exact spelling for Host matching.
+	// Explicit domains must retain their exact spelling for exposure matching.
 	if first, _, ok := strings.Cut(value, "/"); ok && (strings.ContainsAny(first, ".:") || first == "localhost") {
 		parsed, err := reference.Parse(value)
 		if err != nil {
-			return Name{}, err
+			return Reference{}, err
 		}
 		var ok bool
 		named, ok = parsed.(reference.Named)
 		if !ok {
-			return Name{}, fmt.Errorf("reference has no repository name")
+			return Reference{}, fmt.Errorf("reference has no repository name")
 		}
 	}
-	name := Name{Host: reference.Domain(named), Repository: reference.Path(named)}
+	parsedRef := Reference{Domain: reference.Domain(named), Path: reference.Path(named)}
 	if tagged, ok := named.(reference.Tagged); ok {
-		name.Tag = tagged.Tag()
+		parsedRef.Tag = tagged.Tag()
 	} else if _, ok := named.(reference.Digested); !ok {
-		name.Tag = "latest"
+		parsedRef.Tag = "latest"
 	}
-	return name, nil
+	if digested, ok := named.(reference.Digested); ok {
+		parsedRef.Digest = digested.Digest()
+	}
+	return parsedRef, nil
 }
 
+// entry pairs a parsed reference with its pinned backend record and tag selection.
 type entry struct {
-	name               Name
+	ref                Reference
 	record             image.Record
 	backend            image.Backend
 	selected, conflict bool
 }
 
+// Status reports one backend inventory attempt; Images counts exposed references.
 type Status struct {
 	Backend, Error string
 	Images         int
 }
+
+// Row describes an exposed reference in the viewer. StoredDigest identifies the
+// backend target before any manifest conversion; Selected refers to tag selection.
 type Row struct {
-	Host, Repository, Tag, Backend, OriginalDigest string
-	Selected, Conflict                             bool
+	Domain, Path, Tag, Backend, StoredDigest string
+	Selected, Conflict                       bool
 }
+
+// View is a snapshot of exposed references and backend status for one request.
 type View struct {
 	Rows    []Row
 	Status  []Status
@@ -70,20 +102,20 @@ type View struct {
 // fresh backend inventory; no image records or content survive the request.
 type Catalog struct {
 	backends []image.Backend
-	hosts    map[string]bool
+	domains  map[string]bool
 	logger   *slog.Logger
 }
 
-func New(backends []image.Backend, hosts []string, logger *slog.Logger) *Catalog {
-	allowed := make(map[string]bool, len(hosts))
-	for _, host := range hosts {
-		allowed[host] = true
+func New(backends []image.Backend, domains []string, logger *slog.Logger) *Catalog {
+	allowed := make(map[string]bool, len(domains))
+	for _, domain := range domains {
+		allowed[domain] = true
 	}
-	return &Catalog{backends: slices.Clone(backends), hosts: allowed, logger: logger}
+	return &Catalog{backends: slices.Clone(backends), domains: allowed, logger: logger}
 }
-func (c *Catalog) Allows(host string) bool { return c.hosts[host] }
+func (c *Catalog) AllowsDomain(domain string) bool { return c.domains[domain] }
 
-func (c *Catalog) inventory(ctx context.Context, host, repo string) ([]*entry, []Status, error) {
+func (c *Catalog) inventory(ctx context.Context, domain, repositoryPath string) ([]*entry, []Status, error) {
 	var entries []*entry
 	var statuses []Status
 	var failures []error
@@ -98,41 +130,48 @@ func (c *Catalog) inventory(ctx context.Context, host, repo string) ([]*entry, [
 			failures = append(failures, fmt.Errorf("%s: %w", backend.Name(), err))
 		} else {
 			for _, record := range records {
-				name, err := ParseName(record.Reference)
-				if err != nil || !c.Allows(name.Host) {
+				ref, err := ParseReference(record.Reference)
+				if err != nil || !c.AllowsDomain(ref.Domain) {
 					continue
 				}
 				status.Images++
-				if host != "" && name.Host != host || repo != "" && name.Repository != repo {
+				if domain != "" && ref.Domain != domain || repositoryPath != "" && ref.Path != repositoryPath {
 					continue
 				}
-				entries = append(entries, &entry{name: name, record: record, backend: backend})
+				entries = append(entries, &entry{ref: ref, record: record, backend: backend})
 			}
 		}
 		statuses = append(statuses, status)
 	}
 	slices.SortFunc(entries, compareEntries)
-	winners := make(map[Name]*entry)
+	// tagKey identifies a mutable tag within one registry repository, for example
+	// registry.example:5000/team/app:v1. Digest is excluded so records claiming the
+	// same tag compete for selection even when their content differs.
+	type tagKey struct {
+		domain, repositoryPath, tag string
+	}
+	winners := make(map[tagKey]*entry)
 	for _, e := range entries {
-		if e.name.Tag == "" {
+		if e.ref.Tag == "" {
 			continue
 		}
-		winner := winners[e.name]
+		key := tagKey{e.ref.Domain, e.ref.Path, e.ref.Tag}
+		winner := winners[key]
 		if winner == nil {
 			e.selected = true
-			winners[e.name] = e
+			winners[key] = e
 			continue
 		}
 		if winner.record.Target.Digest != e.record.Target.Digest {
 			winner.conflict, e.conflict = true, true
-			c.logger.WarnContext(ctx, "conflicting image tag; serving Docker image", "image", tagKey(e.name), "selected_backend", winner.backend.Name(), "selected_digest", winner.record.Target.Digest, "other_backend", e.backend.Name(), "other_digest", e.record.Target.Digest)
+			c.logger.WarnContext(ctx, "conflicting image tag; serving Docker image", "image", tagReference(e.ref), "selected_backend", winner.backend.Name(), "selected_digest", winner.record.Target.Digest, "other_backend", e.backend.Name(), "other_digest", e.record.Target.Digest)
 		}
 	}
 	return entries, statuses, errors.Join(failures...)
 }
 
 func compareEntries(a, b *entry) int {
-	if n := strings.Compare(tagKey(a.name), tagKey(b.name)); n != 0 {
+	if n := strings.Compare(tagReference(a.ref), tagReference(b.ref)); n != 0 {
 		return n
 	}
 	if a.backend.Name() != b.backend.Name() {
@@ -146,11 +185,13 @@ func compareEntries(a, b *entry) int {
 	}
 	return strings.Compare(a.record.ID, b.record.ID)
 }
-func tagKey(n Name) string { return n.Host + "/" + n.Repository + ":" + n.Tag }
+func tagReference(ref Reference) string { return ref.Domain + "/" + ref.Path + ":" + ref.Tag }
 
 // uniqueRecords collapses tag aliases for content lookup, preserving backend
 // priority. Identity includes the pinned target, so retagged records stay distinct.
 func uniqueRecords(entries []*entry) []*entry {
+	// identity collapses aliases only when backend, immutable ID, and pinned
+	// target digest all match. A reference name alone cannot identify content.
 	type identity struct {
 		backend, id string
 		digest      digest.Digest
@@ -167,26 +208,27 @@ func uniqueRecords(entries []*entry) []*entry {
 	return records
 }
 
-func (c *Catalog) Repositories(ctx context.Context, host string) ([]string, error) {
-	if !c.Allows(host) {
+// Repositories lists repository paths within an exposed registry domain.
+func (c *Catalog) Repositories(ctx context.Context, domain string) ([]string, error) {
+	if !c.AllowsDomain(domain) {
 		return nil, image.ErrNotFound
 	}
-	entries, _, err := c.inventory(ctx, host, "")
+	entries, _, err := c.inventory(ctx, domain, "")
 	if err != nil {
 		return nil, err
 	}
 	names := make(map[string]bool)
 	for _, e := range entries {
-		names[e.name.Repository] = true
+		names[e.ref.Path] = true
 	}
 	return sortedKeys(names), nil
 }
 
-func (c *Catalog) Tags(ctx context.Context, host, repo string) ([]string, error) {
-	if !c.Allows(host) {
+func (c *Catalog) Tags(ctx context.Context, domain, repositoryPath string) ([]string, error) {
+	if !c.AllowsDomain(domain) {
 		return nil, image.ErrNotFound
 	}
-	entries, _, err := c.inventory(ctx, host, repo)
+	entries, _, err := c.inventory(ctx, domain, repositoryPath)
 	if err != nil {
 		return nil, err
 	}
@@ -196,7 +238,7 @@ func (c *Catalog) Tags(ctx context.Context, host, repo string) ([]string, error)
 	tags := make(map[string]bool)
 	for _, e := range entries {
 		if e.selected {
-			tags[e.name.Tag] = true
+			tags[e.ref.Tag] = true
 		}
 	}
 	return sortedKeys(tags), nil
@@ -210,17 +252,18 @@ func sortedKeys(m map[string]bool) []string {
 	return keys
 }
 
-func (c *Catalog) Manifest(ctx context.Context, host, repo, ref string) (image.Manifest, error) {
-	if !c.Allows(host) {
+// Manifest resolves a tag or digest within one registry domain and repository path.
+func (c *Catalog) Manifest(ctx context.Context, domain, repositoryPath, tagOrDigest string) (image.Manifest, error) {
+	if !c.AllowsDomain(domain) {
 		return image.Manifest{}, image.ErrNotFound
 	}
-	entries, _, err := c.inventory(ctx, host, repo)
+	entries, _, err := c.inventory(ctx, domain, repositoryPath)
 	if err != nil {
 		return image.Manifest{}, err
 	}
-	if !strings.Contains(ref, ":") {
+	if !strings.Contains(tagOrDigest, ":") {
 		for _, e := range entries {
-			if !e.selected || e.name.Tag != ref {
+			if !e.selected || e.ref.Tag != tagOrDigest {
 				continue
 			}
 			a, err := e.backend.Prepare(ctx, e.record)
@@ -235,7 +278,7 @@ func (c *Catalog) Manifest(ctx context.Context, host, repo, ref string) (image.M
 		}
 		return image.Manifest{}, image.ErrNotFound
 	}
-	d, err := digest.Parse(ref)
+	d, err := digest.Parse(tagOrDigest)
 	if err != nil {
 		return image.Manifest{}, image.ErrNotFound
 	}
@@ -261,17 +304,18 @@ func (c *Catalog) Manifest(ctx context.Context, host, repo, ref string) (image.M
 	return image.Manifest{}, image.ErrNotFound
 }
 
-// Blob resolves content through an exposed image in repo, regardless of the
-// request authority. The same record must satisfy exposure, repository, and
-// digest membership; cached content alone never establishes membership.
-func (c *Catalog) Blob(ctx context.Context, repo string, d digest.Digest) (*image.BlobRef, error) {
-	if repo == "" {
+// Blob resolves content through an exposed image with the given repository path,
+// regardless of the request authority. The same record must satisfy exposure,
+// repository path, and digest membership; cached content alone never establishes
+// membership.
+func (c *Catalog) Blob(ctx context.Context, repositoryPath string, d digest.Digest) (*image.BlobRef, error) {
+	if repositoryPath == "" {
 		return nil, image.ErrNotFound
 	}
 	if err := d.Validate(); err != nil {
 		return nil, image.ErrNotFound
 	}
-	entries, _, err := c.inventory(ctx, "", repo)
+	entries, _, err := c.inventory(ctx, "", repositoryPath)
 	if err != nil {
 		return nil, err
 	}
@@ -297,7 +341,7 @@ func (c *Catalog) View(ctx context.Context) View {
 	entries, statuses, _ := c.inventory(ctx, "", "")
 	view := View{Status: statuses, Updated: time.Now()}
 	for _, e := range entries {
-		view.Rows = append(view.Rows, Row{Host: e.name.Host, Repository: e.name.Repository, Tag: e.name.Tag, Backend: e.backend.Name(), OriginalDigest: e.record.Target.Digest.String(), Selected: e.selected, Conflict: e.conflict})
+		view.Rows = append(view.Rows, Row{Domain: e.ref.Domain, Path: e.ref.Path, Tag: e.ref.Tag, Backend: e.backend.Name(), StoredDigest: e.record.Target.Digest.String(), Selected: e.selected, Conflict: e.conflict})
 	}
 	return view
 }

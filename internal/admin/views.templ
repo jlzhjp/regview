@@ -62,12 +62,12 @@ templ inventory(view catalog.View) {
 	<div class="table-scroll" role="region" aria-label="Image inventory" tabindex="0">
 		<table class="inventory-table">
 			<caption class="sr-only">Local image references and backend selection</caption>
-			<thead><tr><th scope="col">Registry</th><th scope="col">Repository</th><th scope="col">Tag</th><th scope="col">Backend</th><th scope="col">Selection</th><th scope="col">Stored digest</th><th scope="col">Manifest</th></tr></thead>
+			<thead><tr><th scope="col">Registry domain</th><th scope="col">Repository path</th><th scope="col">Tag</th><th scope="col">Backend</th><th scope="col">Selection</th><th scope="col">Stored digest</th><th scope="col">Manifest</th></tr></thead>
 			<tbody>
 				for _, row := range view.Rows {
 					<tr>
-						<td>{ row.Host }</td>
-						<td>{ row.Repository }</td>
+						<td>{ row.Domain }</td>
+						<td>{ row.Path }</td>
 						<td>{ row.Tag }</td>
 						<td>{ row.Backend }</td>
 						<td>
@@ -78,10 +78,10 @@ templ inventory(view catalog.View) {
 								<strong class="state state-conflict">conflict</strong>
 							}
 						</td>
-						<td><code>{ row.OriginalDigest }</code></td>
+						<td><code>{ row.StoredDigest }</code></td>
 						<td>
 							if row.Selected {
-								<a href={ templ.SafeURL(manifestURL(row)) } hx-get={ manifestURL(row) } hx-target="#details" class="action"><span class="icon icon-code" aria-hidden="true"></span>View manifest<span class="sr-only">{ " for " }{ row.Host }/{ row.Repository }:{ row.Tag }</span></a>
+								<a href={ templ.SafeURL(manifestURL(row)) } hx-get={ manifestURL(row) } hx-target="#details" class="action"><span class="icon icon-code" aria-hidden="true"></span>View manifest<span class="sr-only">{ " for " }{ row.Domain }/{ row.Path }:{ row.Tag }</span></a>
 							}
 						</td>
 					</tr>
@@ -90,12 +90,12 @@ templ inventory(view catalog.View) {
 		</table>
 	</div>
 	if len(view.Rows) == 0 {
-		<p>No images match the configured hosts and filter.</p>
+		<p>No images match the configured registry domains and filter.</p>
 	}
 }
 
 func manifestURL(row catalog.Row) string {
-	return "/manifest?" + url.Values{"host": {row.Host}, "repository": {row.Repository}, "reference": {row.Tag}}.Encode()
+	return "/manifest?" + url.Values{"host": {row.Domain}, "repository": {row.Path}, "reference": {row.Tag}}.Encode()
 }
 
 templ manifestDetails(digest, data string) {

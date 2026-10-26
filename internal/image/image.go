@@ -12,6 +12,9 @@ import (
 
 var ErrNotFound = errors.New("image content not found")
 
+// Record pairs a backend image reference with its immutable local ID and target.
+// Reference carries the repository name and optional tag or digest; Target is the
+// pinned descriptor used for preparation, regardless of later tag changes.
 type Record struct {
 	Reference string
 	ID        string

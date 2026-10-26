@@ -144,7 +144,7 @@ func inventory(view catalog.View) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</ul><h2>Images</h2><div class=\"table-scroll\" role=\"region\" aria-label=\"Image inventory\" tabindex=\"0\"><table class=\"inventory-table\"><caption class=\"sr-only\">Local image references and backend selection</caption> <thead><tr><th scope=\"col\">Registry</th><th scope=\"col\">Repository</th><th scope=\"col\">Tag</th><th scope=\"col\">Backend</th><th scope=\"col\">Selection</th><th scope=\"col\">Stored digest</th><th scope=\"col\">Manifest</th></tr></thead> <tbody>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</ul><h2>Images</h2><div class=\"table-scroll\" role=\"region\" aria-label=\"Image inventory\" tabindex=\"0\"><table class=\"inventory-table\"><caption class=\"sr-only\">Local image references and backend selection</caption> <thead><tr><th scope=\"col\">Registry domain</th><th scope=\"col\">Repository path</th><th scope=\"col\">Tag</th><th scope=\"col\">Backend</th><th scope=\"col\">Selection</th><th scope=\"col\">Stored digest</th><th scope=\"col\">Manifest</th></tr></thead> <tbody>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -154,9 +154,9 @@ func inventory(view catalog.View) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var7 string
-			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(row.Host)
+			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(row.Domain)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/admin/views.templ`, Line: 69, Col: 20}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/admin/views.templ`, Line: 69, Col: 22}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 			if templ_7745c5c3_Err != nil {
@@ -167,9 +167,9 @@ func inventory(view catalog.View) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var8 string
-			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(row.Repository)
+			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(row.Path)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/admin/views.templ`, Line: 70, Col: 26}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/admin/views.templ`, Line: 70, Col: 20}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 			if templ_7745c5c3_Err != nil {
@@ -222,9 +222,9 @@ func inventory(view catalog.View) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var11 string
-			templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(row.OriginalDigest)
+			templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(row.StoredDigest)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/admin/views.templ`, Line: 81, Col: 36}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/admin/views.templ`, Line: 81, Col: 34}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 			if templ_7745c5c3_Err != nil {
@@ -275,9 +275,9 @@ func inventory(view catalog.View) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var15 string
-				templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(row.Host)
+				templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(row.Domain)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/admin/views.templ`, Line: 84, Col: 227}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/admin/views.templ`, Line: 84, Col: 229}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 				if templ_7745c5c3_Err != nil {
@@ -288,9 +288,9 @@ func inventory(view catalog.View) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var16 string
-				templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(row.Repository)
+				templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(row.Path)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/admin/views.templ`, Line: 84, Col: 246}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/admin/views.templ`, Line: 84, Col: 242}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
 				if templ_7745c5c3_Err != nil {
@@ -303,7 +303,7 @@ func inventory(view catalog.View) templ.Component {
 				var templ_7745c5c3_Var17 string
 				templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(row.Tag)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/admin/views.templ`, Line: 84, Col: 258}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/admin/views.templ`, Line: 84, Col: 254}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 				if templ_7745c5c3_Err != nil {
@@ -324,7 +324,7 @@ func inventory(view catalog.View) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		if len(view.Rows) == 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "<p>No images match the configured hosts and filter.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "<p>No images match the configured registry domains and filter.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -334,7 +334,7 @@ func inventory(view catalog.View) templ.Component {
 }
 
 func manifestURL(row catalog.Row) string {
-	return "/manifest?" + url.Values{"host": {row.Host}, "repository": {row.Repository}, "reference": {row.Tag}}.Encode()
+	return "/manifest?" + url.Values{"host": {row.Domain}, "repository": {row.Path}, "reference": {row.Tag}}.Encode()
 }
 
 func manifestDetails(digest, data string) templ.Component {

@@ -31,8 +31,9 @@ must be available; discovery skips unavailable ones. Rootless Podman may need
 
 ### Expose an image
 
-The hostname in an image's tag must match an allowed hostname, including its
-port. For example, tag an existing Docker image and inspect it through regview:
+The registry domain in an image reference must match an allowed domain, including
+its optional port. The `--hostnames` option configures these registry domains.
+For example, tag an existing Docker image and inspect it through regview:
 
 ```sh
 docker tag your-image:latest localhost:5000/team/app:v1
@@ -42,7 +43,7 @@ curl http://localhost:5000/v2/team/app/tags/list
 Use `podman tag` instead for a Podman image. A registry client can pull
 `localhost:5000/team/app:v1` once it is configured to allow HTTP for that registry.
 For another machine, use a hostname that resolves to the regview server in both
-the image tag and `--hostnames`, and set `--registry-listen` to an address the
+the image reference and `--hostnames`, and set `--registry-listen` to an address the
 client can reach, such as `0.0.0.0:5000`.
 
 You can also expose existing image names:
@@ -52,14 +53,14 @@ You can also expose existing image names:
 curl -H 'Host: quay.io' http://127.0.0.1:5000/v2/_catalog
 ```
 
-A normal client must route that registry hostname to regview while preserving
+A normal client must route that registry domain to regview while preserving
 its HTTP `Host` header for repository listings, tags, and manifests. Forwarded
-host headers are ignored. Hostnames are exact:
+host headers are ignored. Registry domains are exact:
 `docker.io` and `registry-1.docker.io` are different. Short image names such as
 `alpine:latest` expand to `docker.io/library/alpine:latest`.
 
-The web viewer shows images across all configured hostnames. Registry clients
-see only repositories and tags under the hostname they request.
+The web viewer shows images across all configured registry domains. Registry
+clients see only repositories and tags under the requested registry domain.
 
 Blob downloads can use any hostname that reaches regview. A requested layer or
 configuration digest must belong to an exposed image in the repository named
@@ -104,16 +105,21 @@ Run `./bin/regview licenses` to read the third-party notices included in the bin
 ## How it works
 
 Registry listings, image lookups, and viewer refreshes read the current local
-image list. Images are grouped by hostname, repository, and tag. If Docker and Podman contain
-different images under the same tag, Docker wins; the viewer shows the conflict.
-Manifest lookups, including by digest, stay within the requested hostname and
-repository. Blob lookups search that repository across all exposed hostnames.
+image list. For `quay.io/team/app:v1`, the registry domain is `quay.io`, the
+repository path is `team/app`, and the tag is `v1`. A registry domain includes
+an optional port, as in `localhost:5000`. The full repository name is
+`quay.io/team/app`; adding the tag produces an image reference.
+Images are grouped by registry domain, repository path, and tag. If Docker
+and Podman contain different images under the same tag, Docker wins; the viewer
+shows the conflict. Manifest lookups, including by digest, stay within the
+requested registry domain and repository path. Blob lookups search that
+repository path across all exposed domains.
 
 ```mermaid
 flowchart TD
     Client[Registry client] --> Request{Request type}
     Request -->|Probe| Ping[Report registry support]
-    Request -->|Catalog, tags, or manifest| Host{Exposed hostname?}
+    Request -->|Catalog, tags, or manifest| Host{Exposed registry domain?}
     Host -->|No| Reject[Reject request]
     Host -->|Yes| Catalog[Read current exposed image lists]
     Request -->|Blob| Catalog

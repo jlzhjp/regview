@@ -19,7 +19,9 @@ import (
 )
 
 type Config struct {
-	Backends                  []string      `mapstructure:"backends" json:"backends"`
+	Backends []string `mapstructure:"backends" json:"backends"`
+
+	// Hostnames contains exact registry domains, including optional ports.
 	Hostnames                 []string      `mapstructure:"hostnames" json:"hostnames"`
 	RegistryListen            string        `mapstructure:"registry-listen" json:"registry-listen"`
 	AdminListen               string        `mapstructure:"admin-listen" json:"admin-listen"`
@@ -51,7 +53,7 @@ func (c Config) AutoBackends() bool { return c.Backends == nil }
 
 func Flags(flags *pflag.FlagSet, d Config) {
 	flags.StringSlice("backends", d.Backends, "Image backends: docker, podman, or both (default: discover usable local backends)")
-	flags.StringSlice("hostnames", nil, "Exact source registry authorities for exposed local images, including ports (required)")
+	flags.StringSlice("hostnames", nil, "Exact source registry domains for exposed local images, including ports (required)")
 	flags.String("registry-listen", d.RegistryListen, "Registry HTTP listen address")
 	flags.String("admin-listen", d.AdminListen, "Admin HTTP listen address")
 	flags.String("docker-engine-socket", d.DockerEngineSocket, "Local Docker engine socket used for discovery")
@@ -135,16 +137,16 @@ func (c Config) Validate() error {
 		seen[backend] = true
 	}
 	if len(c.Hostnames) == 0 {
-		return fmt.Errorf("specify at least one registry authority using --hostnames or hostnames in configuration")
+		return fmt.Errorf("specify at least one registry domain using --hostnames or hostnames in configuration")
 	}
 	for _, host := range c.Hostnames {
 		u, err := url.Parse("http://" + host)
 		if err != nil || u.Host != host || u.Path != "" || u.RawQuery != "" || u.Fragment != "" || u.User != nil || strings.ToLower(host) != host {
-			return fmt.Errorf("invalid registry authority %q", host)
+			return fmt.Errorf("invalid registry domain %q", host)
 		}
 		named, err := reference.WithName(host + "/probe")
 		if err != nil || reference.Domain(named) != host {
-			return fmt.Errorf("invalid registry authority %q", host)
+			return fmt.Errorf("invalid registry domain %q", host)
 		}
 		if port := u.Port(); port != "" {
 			n, err := strconv.Atoi(port)

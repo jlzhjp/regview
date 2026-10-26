@@ -12,18 +12,21 @@ import (
 	"regview/internal/testutil"
 )
 
-func TestNamesPreserveExplicitAuthorities(t *testing.T) {
-	for _, tc := range []struct{ input, host, repo, tag string }{
-		{"alpine", "docker.io", "library/alpine", "latest"},
-		{"team/api:v1", "docker.io", "team/api", "v1"},
-		{"index.docker.io/team/api:v1", "index.docker.io", "team/api", "v1"},
-		{"localhost:5000/team/api:v1", "localhost:5000", "team/api", "v1"},
+func TestParseReferencePreservesExplicitDomains(t *testing.T) {
+	referenceDigest := "sha256:" + strings.Repeat("a", 64)
+	for _, tc := range []struct{ input, domain, repositoryPath, tag, digest string }{
+		{"alpine", "docker.io", "library/alpine", "latest", ""},
+		{"team/api:v1", "docker.io", "team/api", "v1", ""},
+		{"index.docker.io/team/api:v1", "index.docker.io", "team/api", "v1", ""},
+		{"localhost:5000/team/api:v1", "localhost:5000", "team/api", "v1", ""},
+		{"quay.io/team/api@" + referenceDigest, "quay.io", "team/api", "", referenceDigest},
+		{"quay.io/team/api:v1@" + referenceDigest, "quay.io", "team/api", "v1", referenceDigest},
 	} {
-		name, err := ParseName(tc.input)
+		name, err := ParseReference(tc.input)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if name.Host != tc.host || name.Repository != tc.repo || name.Tag != tc.tag {
+		if name.Domain != tc.domain || name.Path != tc.repositoryPath || name.Tag != tc.tag || name.Digest.String() != tc.digest {
 			t.Errorf("%s: %+v", tc.input, name)
 		}
 	}
@@ -133,49 +136,49 @@ func TestConcurrentRequestsSeeLiveRecords(t *testing.T) {
 	}
 }
 
-func TestManifestsRemainAuthorityAndRepositoryScoped(t *testing.T) {
+func TestManifestsRemainDomainAndRepositoryScoped(t *testing.T) {
 	b := testutil.NewBackend("docker")
 	manifest, _ := b.Add("other.test/private:v1", "private bytes")
 	b.Add("example.test/public:v1", "public bytes")
 	c := New([]image.Backend{b}, []string{"example.test", "other.test"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
-	for _, repo := range []string{"public", "private"} {
-		if _, err := c.Manifest(t.Context(), "example.test", repo, manifest.Digest.String()); !errors.Is(err, image.ErrNotFound) {
-			t.Fatalf("manifest leaked: %s %v", repo, err)
+	for _, repositoryPath := range []string{"public", "private"} {
+		if _, err := c.Manifest(t.Context(), "example.test", repositoryPath, manifest.Digest.String()); !errors.Is(err, image.ErrNotFound) {
+			t.Fatalf("manifest leaked: %s %v", repositoryPath, err)
 		}
 	}
 }
 
-func TestListingsAndManifestsStayHostScoped(t *testing.T) {
+func TestListingsAndManifestsStayDomainScoped(t *testing.T) {
 	backend := testutil.NewBackend("docker")
 	first, _ := backend.Add("first.test/team/app:v1", "first")
 	second, _ := backend.Add("second.test/team/app:v2", "second")
 	backend.Add("second.test/other:v1", "other")
 	backend.Add("hidden.test/secret:v1", "hidden")
 	c := New([]image.Backend{backend}, []string{"first.test", "second.test"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
-	for _, tc := range []struct{ host, repositories, tag string }{
+	for _, tc := range []struct{ domain, repositories, tag string }{
 		{"first.test", "team/app", "v1"},
 		{"second.test", "other,team/app", "v2"},
 	} {
-		repos, err := c.Repositories(t.Context(), tc.host)
+		repos, err := c.Repositories(t.Context(), tc.domain)
 		if err != nil || strings.Join(repos, ",") != tc.repositories {
-			t.Fatalf("%s repositories: %v %v", tc.host, repos, err)
+			t.Fatalf("%s repositories: %v %v", tc.domain, repos, err)
 		}
-		tags, err := c.Tags(t.Context(), tc.host, "team/app")
+		tags, err := c.Tags(t.Context(), tc.domain, "team/app")
 		if err != nil || len(tags) != 1 || tags[0] != tc.tag {
-			t.Fatalf("%s tags: %v %v", tc.host, tags, err)
+			t.Fatalf("%s tags: %v %v", tc.domain, tags, err)
 		}
 	}
-	for _, host := range []string{"hidden.test", "peer.test", ""} {
-		if _, err := c.Repositories(t.Context(), host); !errors.Is(err, image.ErrNotFound) {
-			t.Fatalf("%q catalog: %v", host, err)
+	for _, domain := range []string{"hidden.test", "peer.test", ""} {
+		if _, err := c.Repositories(t.Context(), domain); !errors.Is(err, image.ErrNotFound) {
+			t.Fatalf("%q catalog: %v", domain, err)
 		}
-		if _, err := c.Tags(t.Context(), host, "team/app"); !errors.Is(err, image.ErrNotFound) {
-			t.Fatalf("%q tags: %v", host, err)
+		if _, err := c.Tags(t.Context(), domain, "team/app"); !errors.Is(err, image.ErrNotFound) {
+			t.Fatalf("%q tags: %v", domain, err)
 		}
 	}
 	for _, ref := range []string{"v2", second.Digest.String()} {
 		if _, err := c.Manifest(t.Context(), "first.test", "team/app", ref); !errors.Is(err, image.ErrNotFound) {
-			t.Fatalf("manifest crossed hosts: %s %v", ref, err)
+			t.Fatalf("manifest crossed domains: %s %v", ref, err)
 		}
 	}
 	if got, err := c.Manifest(t.Context(), "first.test", "team/app", first.Digest.String()); err != nil || got.Descriptor.Digest != first.Digest {
@@ -186,7 +189,7 @@ func TestListingsAndManifestsStayHostScoped(t *testing.T) {
 		t.Fatalf("viewer inventory: %+v", view.Rows)
 	}
 	for _, row := range view.Rows {
-		if row.Host != "first.test" && row.Host != "second.test" {
+		if row.Domain != "first.test" && row.Domain != "second.test" {
 			t.Fatalf("viewer exposed hidden source: %+v", row)
 		}
 	}

@@ -32,6 +32,7 @@ func New(c *catalog.Catalog, logger *slog.Logger) http.Handler {
 	h := &Handler{catalog: c, logger: logger}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v2/{$}", h.ping)
+	mux.HandleFunc("/v2/_catalog", h.repositories)
 	mux.HandleFunc("/v2/{path...}", h.dispatch)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		failure(w, r, http.StatusNotFound, "NAME_UNKNOWN", "unknown registry endpoint")
@@ -53,10 +54,6 @@ func (*Handler) ping(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) dispatch(w http.ResponseWriter, r *http.Request) {
 	path := r.PathValue("path")
-	if path == "_catalog" {
-		h.repositories(w, r)
-		return
-	}
 	if repo, ok := strings.CutSuffix(path, "/tags/list"); ok {
 		if !validRepository(repo) {
 			failure(w, r, 400, "NAME_INVALID", "invalid repository name")

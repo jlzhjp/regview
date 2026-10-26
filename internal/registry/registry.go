@@ -38,10 +38,6 @@ func New(c *catalog.Catalog, logger *slog.Logger) http.Handler {
 	})
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Docker-Distribution-API-Version", "registry/2.0")
-		if !c.Allows(r.Host) {
-			failure(w, r, http.StatusNotFound, "NAME_UNKNOWN", "registry hostname is not exposed")
-			return
-		}
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			w.Header().Set("Allow", "GET, HEAD")
 			failure(w, r, http.StatusMethodNotAllowed, "UNSUPPORTED", "registry is read-only")
@@ -62,7 +58,7 @@ func (h *Handler) dispatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if repo, ok := strings.CutSuffix(path, "/tags/list"); ok {
-		if !validRepository(r.Host, repo) {
+		if !validRepository(repo) {
 			failure(w, r, 400, "NAME_INVALID", "invalid repository name")
 			return
 		}
@@ -79,7 +75,7 @@ func (h *Handler) dispatch(w http.ResponseWriter, r *http.Request) {
 	}
 	if offset >= 0 {
 		repo, ref := path[:offset], path[offset+len(kind)+2:]
-		if !validRepository(r.Host, repo) {
+		if !validRepository(repo) {
 			failure(w, r, 400, "NAME_INVALID", "invalid repository name")
 			return
 		}
@@ -97,12 +93,14 @@ func (h *Handler) dispatch(w http.ResponseWriter, r *http.Request) {
 	failure(w, r, 404, "NAME_UNKNOWN", "unknown registry endpoint")
 }
 
-func validRepository(host, repo string) bool {
+func validRepository(repo string) bool {
 	if repo == "" {
 		return false
 	}
-	named, err := reference.WithName(host + "/" + repo)
-	return err == nil && reference.Domain(named) == host && reference.Path(named) == repo
+	// WithName accepts an optional registry authority. Supply one explicitly so
+	// every component of repo is validated as a path, never as a hostname or port.
+	named, err := reference.WithName("registry.invalid/" + repo)
+	return err == nil && reference.Path(named) == repo
 }
 
 func (h *Handler) repositories(w http.ResponseWriter, r *http.Request) {
@@ -218,7 +216,7 @@ func (h *Handler) blob(w http.ResponseWriter, r *http.Request, repo, ref string)
 		failure(w, r, 400, "DIGEST_INVALID", "invalid blob digest")
 		return
 	}
-	resolved, err := h.catalog.Blob(r.Context(), r.Host, repo, d)
+	resolved, err := h.catalog.Blob(r.Context(), repo, d)
 	if err != nil {
 		h.contentError(w, r, err, "BLOB_UNKNOWN")
 		return

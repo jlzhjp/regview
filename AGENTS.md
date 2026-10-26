@@ -42,9 +42,10 @@ go vet -tags containers_image_openpgp,exclude_graphdriver_btrfs ./...
 ```
 
 Use existing behavioral tests to check refactors. Add focused tests for discovered
-bugs and changed behavior. Preserve host/repository isolation, Docker conflict
-priority, pinned records during retagging/deletion, original Docker bytes,
-Podman verification, and cleanup/cancellation of readers and leases.
+bugs and changed behavior. Preserve host-scoped manifests and listings, exposed
+repository membership for blobs, Docker conflict priority, pinned records during
+retagging/deletion, original Docker bytes, Podman verification, and
+cleanup/cancellation of readers and leases.
 See e2e/mkosi/README.md for the Fedora VM workflow.
 
 ## Package boundaries
@@ -69,6 +70,12 @@ one request. Do not introduce a stale-inventory fallback or background refresh.
 Backend connections and verified immutable readers may be shared. Preparation
 must use the selected record's immutable ID and descriptor, never resolve its tag
 again. Do not fall back to another backend after a selected tag fails preparation.
+
+Registry catalogs, tags, and manifests are scoped to the requested exposed
+authority. Blob lookup deliberately ignores the request authority: one locally
+exposed image record must match both the repository path and requested digest.
+Do not combine exposure from one record with membership from an unexposed record.
+The registry probe accepts any authority; the viewer lists all exposed authorities.
 
 ## UI and generated files
 

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"strings"
 	"sync"
 	"testing"
 
@@ -132,17 +133,61 @@ func TestConcurrentRequestsSeeLiveRecords(t *testing.T) {
 	}
 }
 
-func TestAuthorityAndRepositoryRemainIsolated(t *testing.T) {
+func TestManifestsRemainAuthorityAndRepositoryScoped(t *testing.T) {
 	b := testutil.NewBackend("docker")
-	manifest, layer := b.Add("other.test/private:v1", "private bytes")
+	manifest, _ := b.Add("other.test/private:v1", "private bytes")
 	b.Add("example.test/public:v1", "public bytes")
 	c := New([]image.Backend{b}, []string{"example.test", "other.test"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	for _, repo := range []string{"public", "private"} {
 		if _, err := c.Manifest(t.Context(), "example.test", repo, manifest.Digest.String()); !errors.Is(err, image.ErrNotFound) {
 			t.Fatalf("manifest leaked: %s %v", repo, err)
 		}
-		if _, err := c.Blob(t.Context(), "example.test", repo, layer.Digest); !errors.Is(err, image.ErrNotFound) {
-			t.Fatalf("blob leaked: %s %v", repo, err)
+	}
+}
+
+func TestListingsAndManifestsStayHostScoped(t *testing.T) {
+	backend := testutil.NewBackend("docker")
+	first, _ := backend.Add("first.test/team/app:v1", "first")
+	second, _ := backend.Add("second.test/team/app:v2", "second")
+	backend.Add("second.test/other:v1", "other")
+	backend.Add("hidden.test/secret:v1", "hidden")
+	c := New([]image.Backend{backend}, []string{"first.test", "second.test"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	for _, tc := range []struct{ host, repositories, tag string }{
+		{"first.test", "team/app", "v1"},
+		{"second.test", "other,team/app", "v2"},
+	} {
+		repos, err := c.Repositories(t.Context(), tc.host)
+		if err != nil || strings.Join(repos, ",") != tc.repositories {
+			t.Fatalf("%s repositories: %v %v", tc.host, repos, err)
+		}
+		tags, err := c.Tags(t.Context(), tc.host, "team/app")
+		if err != nil || len(tags) != 1 || tags[0] != tc.tag {
+			t.Fatalf("%s tags: %v %v", tc.host, tags, err)
+		}
+	}
+	for _, host := range []string{"hidden.test", "peer.test", ""} {
+		if _, err := c.Repositories(t.Context(), host); !errors.Is(err, image.ErrNotFound) {
+			t.Fatalf("%q catalog: %v", host, err)
+		}
+		if _, err := c.Tags(t.Context(), host, "team/app"); !errors.Is(err, image.ErrNotFound) {
+			t.Fatalf("%q tags: %v", host, err)
+		}
+	}
+	for _, ref := range []string{"v2", second.Digest.String()} {
+		if _, err := c.Manifest(t.Context(), "first.test", "team/app", ref); !errors.Is(err, image.ErrNotFound) {
+			t.Fatalf("manifest crossed hosts: %s %v", ref, err)
+		}
+	}
+	if got, err := c.Manifest(t.Context(), "first.test", "team/app", first.Digest.String()); err != nil || got.Descriptor.Digest != first.Digest {
+		t.Fatalf("local manifest: %v", err)
+	}
+	view := c.View(t.Context())
+	if len(view.Rows) != 3 {
+		t.Fatalf("viewer inventory: %+v", view.Rows)
+	}
+	for _, row := range view.Rows {
+		if row.Host != "first.test" && row.Host != "second.test" {
+			t.Fatalf("viewer exposed hidden source: %+v", row)
 		}
 	}
 }

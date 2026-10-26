@@ -111,7 +111,7 @@ func TestPodmanHTTPMetadataRangesAndIsolation(t *testing.T) {
 		{"GET", map[string]string{"If-None-Match": strconv.Quote(d.String())}, 304},
 		{"GET", map[string]string{"If-Match": "\"different\""}, 412},
 	} {
-		w := request(tc.method, "example.test", path, tc.headers)
+		w := request(tc.method, "peer.test:5000", path, tc.headers)
 		if w.Code != tc.status || w.Body.Len() != 0 {
 			t.Fatalf("metadata-only: %d %s", w.Code, w.Body)
 		}
@@ -123,7 +123,7 @@ func TestPodmanHTTPMetadataRangesAndIsolation(t *testing.T) {
 		{"Range": "bytes=2-5"},
 		{"Range": "bytes=2-5", "If-Range": strconv.Quote(d.String())},
 	} {
-		w := request("GET", "example.test", path, headers)
+		w := request("GET", "peer.test:5000", path, headers)
 		if w.Code != 206 || w.Body.String() != string(src.blobs[d][2:6]) || w.Header().Get("Content-Range") != "bytes 2-5/100" {
 			t.Fatalf("range: %d %s %v", w.Code, w.Body, w.Header())
 		}
@@ -146,7 +146,7 @@ func TestPodmanHTTPMetadataRangesAndIsolation(t *testing.T) {
 	}
 	// Corrupt bytes must fail before any layer data or success status is sent.
 	src.blobs[d] = []byte("corrupted export")
-	if w := request("GET", "example.test", path, nil); w.Code != 503 || strings.Contains(w.Body.String(), "corrupted export") {
+	if w := request("GET", "peer.test:5000", path, nil); w.Code != 503 || strings.Contains(w.Body.String(), "corrupted export") {
 		t.Fatalf("unverified response: %d %s", w.Code, w.Body)
 	}
 	files, err := os.ReadDir(dir)

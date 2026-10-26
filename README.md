@@ -53,9 +53,18 @@ curl -H 'Host: quay.io' http://127.0.0.1:5000/v2/_catalog
 ```
 
 A normal client must route that registry hostname to regview while preserving
-its HTTP `Host` header. Forwarded host headers are ignored. Hostnames are exact:
+its HTTP `Host` header for repository listings, tags, and manifests. Forwarded
+host headers are ignored. Hostnames are exact:
 `docker.io` and `registry-1.docker.io` are different. Short image names such as
 `alpine:latest` expand to `docker.io/library/alpine:latest`.
+
+The web viewer shows images across all configured hostnames. Registry clients
+see only repositories and tags under the hostname they request.
+
+Blob downloads can use any hostname that reaches regview. A requested layer or
+configuration digest must belong to an exposed image in the repository named
+in the URL. Knowing a digest does not grant access to content belonging only to
+unexposed images or other repositories. The `/v2/` probe also accepts any hostname.
 
 ### Save your settings
 
@@ -97,13 +106,17 @@ Run `./bin/regview licenses` to read the third-party notices included in the bin
 Registry listings, image lookups, and viewer refreshes read the current local
 image list. Images are grouped by hostname, repository, and tag. If Docker and Podman contain
 different images under the same tag, Docker wins; the viewer shows the conflict.
-Digest and blob lookups stay within the requested hostname and repository.
+Manifest lookups, including by digest, stay within the requested hostname and
+repository. Blob lookups search that repository across all exposed hostnames.
 
 ```mermaid
 flowchart TD
-    Client[Registry client] --> Host{Allowed hostname?}
+    Client[Registry client] --> Request{Request type}
+    Request -->|Probe| Ping[Report registry support]
+    Request -->|Catalog, tags, or manifest| Host{Exposed hostname?}
     Host -->|No| Reject[Reject request]
-    Host -->|Yes| Catalog[Read current image lists]
+    Host -->|Yes| Catalog[Read current exposed image lists]
+    Request -->|Blob| Catalog
     Viewer[Web viewer] --> Catalog
     Docker[Docker containerd store] --> Catalog
     Podman[Podman local storage] --> Catalog

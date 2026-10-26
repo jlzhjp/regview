@@ -139,11 +139,11 @@ func TestMeasuredReaderRemainsPinnedWithinRequestAfterExpiry(t *testing.T) {
 	})
 }
 
-func TestWarmReaderDoesNotAuthorizeDeletedOrOtherRepository(t *testing.T) {
+func TestWarmReaderRequiresCurrentExposureAndRepository(t *testing.T) {
 	b, src, _ := cachedFixture(t, 0)
 	c := catalog.New([]image.Backend{b}, []string{"example.test"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	d := src.layers[0].Digest
-	ref, err := c.Blob(t.Context(), "example.test", "app", d)
+	ref, err := c.Blob(t.Context(), "app", d)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,14 +153,16 @@ func TestWarmReaderDoesNotAuthorizeDeletedOrOtherRepository(t *testing.T) {
 	}
 	_ = blob.Close()
 	_ = ref.Close()
-	if _, err := c.Blob(t.Context(), "example.test", "other", d); !errors.Is(err, image.ErrNotFound) {
+	if _, err := c.Blob(t.Context(), "other", d); !errors.Is(err, image.ErrNotFound) {
 		t.Fatalf("cached digest escaped repository: %v", err)
 	}
-	if _, err := c.Blob(t.Context(), "wrong.test", "app", d); !errors.Is(err, image.ErrNotFound) {
-		t.Fatalf("cached digest escaped host: %v", err)
+	b.records[0].Reference = "unexposed.test/app:v1"
+	if _, err := c.Blob(t.Context(), "app", d); !errors.Is(err, image.ErrNotFound) {
+		t.Fatalf("cached digest escaped exposure: %v", err)
 	}
+	b.records[0].Reference = "example.test/app:v1"
 	b.records = nil
-	if _, err := c.Blob(t.Context(), "example.test", "app", d); !errors.Is(err, image.ErrNotFound) {
+	if _, err := c.Blob(t.Context(), "app", d); !errors.Is(err, image.ErrNotFound) {
 		t.Fatalf("deleted image served from cache: %v", err)
 	}
 	if _, err := c.Manifest(t.Context(), "example.test", "app", "v1"); !errors.Is(err, image.ErrNotFound) {

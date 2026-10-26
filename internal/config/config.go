@@ -51,7 +51,7 @@ func (c Config) AutoBackends() bool { return c.Backends == nil }
 
 func Flags(flags *pflag.FlagSet, d Config) {
 	flags.StringSlice("backends", d.Backends, "Image backends: docker, podman, or both (default: discover usable local backends)")
-	flags.StringSlice("hostnames", nil, "Exact registry authorities to expose, including ports (required)")
+	flags.StringSlice("hostnames", nil, "Exact source registry authorities for exposed local images, including ports (required)")
 	flags.String("registry-listen", d.RegistryListen, "Registry HTTP listen address")
 	flags.String("admin-listen", d.AdminListen, "Admin HTTP listen address")
 	flags.String("docker-engine-socket", d.DockerEngineSocket, "Local Docker engine socket used for discovery")

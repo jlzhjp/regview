@@ -75,7 +75,9 @@ HEAD and conditional requests use metadata without exporting known-size layers.
 Unknown-size layers may still require measurement. Ranges and If-Range are
 supported. A cached range download reuses the verified file. A cache miss
 reconstructs and verifies the complete layer before sending just the requested
-range. No blob cache hit bypasses current host/repository resolution.
+range. No blob cache hit bypasses current exposure and repository membership
+checks. Blob lookup ignores the request authority but requires a matching
+repository on a locally exposed source registry.
 
 The original configuration blob is preserved. Generated Podman OCI manifests
 usually have different digests from the stored manifests. Digest lookup regenerates

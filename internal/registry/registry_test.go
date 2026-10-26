@@ -35,8 +35,13 @@ func TestRegistryPullAndIsolation(t *testing.T) {
 		return w
 	}
 	for _, host := range []string{"example.test", "example.test:5001", "EXAMPLE.test:5000"} {
-		if w := request("GET", host, "/v2/", nil); w.Code != 404 {
-			t.Fatalf("host %s: %d", host, w.Code)
+		if w := request("GET", host, "/v2/", nil); w.Code != 200 {
+			t.Fatalf("ping host %s: %d", host, w.Code)
+		}
+		for _, path := range []string{"/v2/_catalog", "/v2/team/nested/api/tags/list", "/v2/team/nested/api/manifests/latest"} {
+			if w := request("GET", host, path, nil); w.Code != 404 {
+				t.Fatalf("host %s path %s: %d", host, path, w.Code)
+			}
 		}
 	}
 	if w := request("GET", "example.test:5000", "/v2/", nil); w.Code != 200 || w.Body.String() != "{}" {
@@ -76,7 +81,7 @@ func TestRegistryPullAndIsolation(t *testing.T) {
 		{"GET", map[string]string{"If-Match": "\"wrong\""}, 412},
 	} {
 		before := docker.Opens.Load()
-		w := request(tc.method, "example.test:5000", blobPath, tc.headers)
+		w := request(tc.method, "peer.test:6000", blobPath, tc.headers)
 		if w.Code != tc.status || w.Body.Len() != 0 {
 			t.Fatalf("metadata response: %d %s", w.Code, w.Body)
 		}
@@ -84,19 +89,20 @@ func TestRegistryPullAndIsolation(t *testing.T) {
 			t.Fatal("HEAD/conditional opened blob")
 		}
 	}
-	if w := request("GET", "example.test:5000", blobPath, map[string]string{"Range": "bytes=2-5"}); w.Code != 206 || w.Body.String() != "2345" {
+	if w := request("GET", "peer.test:6000", blobPath, map[string]string{"Range": "bytes=2-5"}); w.Code != 206 || w.Body.String() != "2345" {
 		t.Fatalf("range: %d %s", w.Code, w.Body)
 	}
-	if w := request("GET", "example.test:5000", blobPath, map[string]string{"Range": "bytes=2-5", "If-Range": "\"wrong\""}); w.Code != 200 || w.Body.String() != "0123456789" {
+	if w := request("GET", "peer.test:6000", blobPath, map[string]string{"Range": "bytes=2-5", "If-Range": "\"wrong\""}); w.Code != 200 || w.Body.String() != "0123456789" {
 		t.Fatalf("If-Range mismatch: %d %s", w.Code, w.Body)
 	}
-	if w := request("GET", "example.test:5000", blobPath, map[string]string{"Range": "bytes=999-1000"}); w.Code != 416 {
+	if w := request("GET", "peer.test:6000", blobPath, map[string]string{"Range": "bytes=999-1000"}); w.Code != 416 {
 		t.Fatalf("invalid range: %d", w.Code)
 	}
-	for _, d := range []string{privateLayer.Digest.String(), otherLayer.Digest.String()} {
-		if w := request("GET", "example.test:5000", "/v2/team/nested/api/blobs/"+d, nil); w.Code != 404 {
-			t.Fatalf("leaked blob %s: %d", d, w.Code)
-		}
+	if w := request("GET", "peer.test:6000", "/v2/team/nested/api/blobs/"+privateLayer.Digest.String(), nil); w.Code != 200 || w.Body.String() != "secret" {
+		t.Fatalf("exposed source with matching repository: %d %s", w.Code, w.Body)
+	}
+	if w := request("GET", "peer.test:6000", "/v2/team/nested/api/blobs/"+otherLayer.Digest.String(), nil); w.Code != 404 {
+		t.Fatalf("blob escaped repository: %d", w.Code)
 	}
 	if w := request("GET", "example.test:5000", "/v2/team/nested/api/blobs/sha256:invalid", nil); w.Code != 400 {
 		t.Fatalf("digest validation: %d", w.Code)
@@ -175,4 +181,46 @@ func TestConflictAlwaysSelectsDocker(t *testing.T) {
 		})
 	}
 	wg.Wait()
+}
+
+func TestBlobExposureAndRepositoryMembership(t *testing.T) {
+	backend := testutil.NewBackend("docker")
+	_, shared := backend.Add("exposed.test/team/app:v1", "shared layer")
+	backend.Add("hidden.test/team/app:v1", "shared layer")
+	_, hidden := backend.Add("hidden.test/team/app:v2", "hidden layer")
+	backend.Add("exposed.test/other:v1", "hidden layer")
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	handler := registry.New(catalog.New([]image.Backend{backend}, []string{"exposed.test"}, logger), logger)
+
+	for _, host := range []string{"exposed.test", "hidden.test", "peer.test:6000", "127.0.0.1:6000", "[::1]:6000"} {
+		for _, method := range []string{"GET", "HEAD"} {
+			for _, tc := range []struct {
+				name, repo, digest, body string
+				status                   int
+			}{
+				{"shared", "team/app", shared.Digest.String(), "shared layer", 200},
+				{"hidden", "team/app", hidden.Digest.String(), "", 404},
+				{"other repository", "other", shared.Digest.String(), "", 404},
+				{"exposed alias", "other", hidden.Digest.String(), "hidden layer", 200},
+				{"unknown repository", "unknown", shared.Digest.String(), "", 404},
+				{"invalid repository", "team:5000/app", shared.Digest.String(), "", 400},
+				{"invalid digest", "team/app", "sha256:invalid", "", 400},
+			} {
+				t.Run(host+"/"+method+"/"+tc.name, func(t *testing.T) {
+					path := "/v2/" + tc.repo + "/blobs/" + tc.digest
+					response := httptest.NewRecorder()
+					handler.ServeHTTP(response, httptest.NewRequestWithContext(t.Context(), method, "http://"+host+path, nil))
+					if response.Code != tc.status {
+						t.Fatalf("response: %d %s", response.Code, response.Body)
+					}
+					if method == "HEAD" && response.Body.Len() != 0 {
+						t.Fatal("HEAD returned a body")
+					}
+					if method == "GET" && tc.status == 200 && response.Body.String() != tc.body {
+						t.Fatalf("blob content: %q", response.Body.String())
+					}
+				})
+			}
+		}
+	}
 }

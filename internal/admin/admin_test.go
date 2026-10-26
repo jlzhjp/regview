@@ -15,14 +15,17 @@ import (
 func TestViewerAndHTMXPartials(t *testing.T) {
 	b := testutil.NewBackend("docker")
 	b.Add("example.test/team/api:v1", "layer")
+	b.Add("other.test/other/app:v2", "other layer")
+	b.Add("hidden.test/secret:v1", "hidden layer")
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	c := catalog.New([]image.Backend{b}, []string{"example.test"}, logger)
+	c := catalog.New([]image.Backend{b}, []string{"example.test", "other.test"}, logger)
 	h := New(c, logger)
 	for _, tc := range []struct{ path, contains string }{
 		{"/", `<script type="module" src="/assets/ui/app.js"`},
 		{"/", `<link rel="stylesheet" href="/assets/ui/app.css"`},
 		{"/", `<meta name="htmx-config" content='{"allowEval":false}'>`},
 		{"/images", "team/api"},
+		{"/images", "other/app"},
 		{"/images?q=nothing", "No images match"},
 		{"/manifest?host=example.test&repository=team/api&reference=v1", "Served digest"},
 		{"/assets/ui/app.js", "htmx"},
@@ -40,6 +43,9 @@ func TestViewerAndHTMXPartials(t *testing.T) {
 		}
 		if tc.path == "/images" && strings.Contains(w.Body.String(), "<html") {
 			t.Fatal("partial returned full page")
+		}
+		if (tc.path == "/" || tc.path == "/images") && strings.Contains(w.Body.String(), "hidden.test") {
+			t.Fatal("viewer showed an unexposed host")
 		}
 	}
 }

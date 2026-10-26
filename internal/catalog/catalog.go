@@ -168,6 +168,9 @@ func uniqueRecords(entries []*entry) []*entry {
 }
 
 func (c *Catalog) Repositories(ctx context.Context, host string) ([]string, error) {
+	if !c.Allows(host) {
+		return nil, image.ErrNotFound
+	}
 	entries, _, err := c.inventory(ctx, host, "")
 	if err != nil {
 		return nil, err
@@ -180,6 +183,9 @@ func (c *Catalog) Repositories(ctx context.Context, host string) ([]string, erro
 }
 
 func (c *Catalog) Tags(ctx context.Context, host, repo string) ([]string, error) {
+	if !c.Allows(host) {
+		return nil, image.ErrNotFound
+	}
 	entries, _, err := c.inventory(ctx, host, repo)
 	if err != nil {
 		return nil, err
@@ -255,14 +261,17 @@ func (c *Catalog) Manifest(ctx context.Context, host, repo, ref string) (image.M
 	return image.Manifest{}, image.ErrNotFound
 }
 
-func (c *Catalog) Blob(ctx context.Context, host, repo string, d digest.Digest) (*image.BlobRef, error) {
-	if !c.Allows(host) {
+// Blob resolves content through an exposed image in repo, regardless of the
+// request authority. The same record must satisfy exposure, repository, and
+// digest membership; cached content alone never establishes membership.
+func (c *Catalog) Blob(ctx context.Context, repo string, d digest.Digest) (*image.BlobRef, error) {
+	if repo == "" {
 		return nil, image.ErrNotFound
 	}
 	if err := d.Validate(); err != nil {
 		return nil, image.ErrNotFound
 	}
-	entries, _, err := c.inventory(ctx, host, repo)
+	entries, _, err := c.inventory(ctx, "", repo)
 	if err != nil {
 		return nil, err
 	}
